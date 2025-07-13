@@ -22,16 +22,47 @@
 # 9 Find routes that pass through 'stressful junctions'
 # 10 Produce an expanded version of the output routes with network link details attached
 
+# select city
+# city <- "Melbourne"
+city <- "Bendigo"
 
+
+# 0 Setup ----
+# -----------------------------------------------------------------------------#
 # set inputs
-networkFile <- "./data/network_weighted.sqlite"  # simplified network (note - all one way, contains LTS and other impedances)
-linkLayer <- "links"
-nodeLayer <- "nodes"
-surveyFile <- "./data/routedata.csv"
-outputMapDir <- "./data/output maps"
-stressJctFile <- "./data/StressJct.csv"
-favSpotFile <- "./data/FavSpot.csv"
-
+if (city == "Melbourne") {
+  networkFile <- "./data/network_weighted.sqlite"  # simplified network (note - all one way, contains LTS and other impedances)
+  linkLayer <- "links"
+  nodeLayer <- "nodes"
+  surveyFile <- "./data/routedata.csv"
+  outputRoutes <- "./data/routes_networked.sqlite"
+  outputMapDir <- "./data/output maps"
+  outputRoutesExpanded <- "./data/routes_networked_expanded.csv"
+  stressJctFile <- "./data/StressJct.csv"
+  favSpotFile <- "./data/FavSpot.csv"
+  circularRoutes <- c("7bep8cwz3fb6_2", "7l9g4utj97r6_1",
+                      "9vl86ffx3ue4_1", "9yr2zbt7i4s6_1",
+                      "9pt99buo346p_1", "2t66ibj3wkt8_1")  # maps 353, 376, 542, 554, 517, 66?
+  
+} else if (city == "Bendigo") {
+  networkFile <- "../network v20250512 unsimplified/network.sqlite"  # note - all one way, contains LTS and other impedances
+  linkLayer <- "links"
+  nodeLayer <- "nodes"
+  surveyFile <- "../Bendigo survey/responses-8gi6nyx69dt6-2025-07-10T04_40_41.798Z.xlsx"
+  outputRoutes <- "../Bendigo survey/routes_networked.sqlite"
+  outputMapDir <- "../Bendigo survey/output maps"
+  outputRoutesExpanded <- "../Bendigo survey/routes_networked_expanded.csv"
+  stressJctSheet <- "Most stressful intersection(s) "
+  favSpotSheet <- "My favorite spot(s) along the r"
+  unfavSpotSheet <- "My least favorite spot(s) along"
+  circularRoutes <- c(16, 25, 141, 144, 148, 153, 176, 238, 268, 287, 297, 298,
+                      307, 308, 314, 315, 318, 321, 325, 340, 344, 345, 351, 369, 
+                      370, 371, 374, 375, 376, 377, 379, 382, 389, 395, 398, 412,
+                      430, 440, 442)
+  
+} else {
+  print("STOP: Select configured city before proceeding further")
+}
 
 # set up environment
 library(dplyr)
@@ -43,9 +74,8 @@ library(ggspatial) ## map tiles
 library(doSNOW)
 library(parallel)
 library(foreach)
-# library(lwgeom)
-# library(nngeo)  # for nn (nearest) - not used where k=1, use st_nearest_feature
 library(fs)  # for dir_walk
+library(readxl)
 
 dir_walk(path="./functions/",source, recurse=T, type = "file")
 
@@ -72,7 +102,6 @@ largest.component <- largestConnectedComponent(all.cyclable.nodes, all.cyclable.
 cyclable.nodes <- largest.component[[1]]
 cyclable.links <- largest.component[[2]]
 
-
 # nodes for from and to links
 cyclable.from.nodes <- nodes %>%
   filter(id %in% cyclable.links$from_id)
@@ -82,23 +111,58 @@ cyclable.to.nodes <- nodes %>%
 
 cyclable.both.nodes <- nodes %>%
   filter(id %in% cyclable.links$from_id & id %in% cyclable.links$to_id)
-  
 
 # get the crs of the network (so routes can be in same crs)
 networkCrs <- st_crs(links)
 
 # graph from network
-graph <- graph_from_data_frame(cyclable.links %>%
-                                 mutate(weight = length) %>%
-                                 dplyr::select(from_id, to_id, weight, link_id),
-                               directed = T,
-                               vertices = cyclable.nodes)
+if (city == "Melbourne") {
+  # use length as weight
+  graph <- graph_from_data_frame(cyclable.links %>%
+                                   mutate(weight = length) %>%
+                                   dplyr::select(from_id, to_id, weight, link_id),
+                                 directed = T,
+                                 vertices = cyclable.nodes)
+} else if (city == "Bendigo") {
+  # weight length to encourage cycleway use, eg avoid footpaths, because unsimplified network
+  graph <- graph_from_data_frame(cyclable.links %>%
+                                   mutate(weight = case_when(
+                                     !is.na(cycleway) ~ length * 0.9, 
+                                     is_cycle == 0    ~ length * 1.15,
+                                     TRUE             ~ length
+                                   )) %>%
+                                   dplyr::select(from_id, to_id, weight, link_id),
+                                 directed = T,
+                                 vertices = cyclable.nodes)
+}
+
+# remove unused network elements to free memory
+rm(largest.component,
+   all.cyclable.links, all.cyclable.nodes)
+gc()
 
 
 # 2 Load and process survey routes ----
 # -----------------------------------------------------------------------------#
 # load survey paths
-routes <- read.csv(surveyFile)
+if (city == "Melboourne") {
+  routes <- read.csv(surveyFile)
+} else if (city == "Bendigo") {
+  sheet_names <- excel_sheets(surveyFile)
+  route_sheet_names <- sheet_names[!sheet_names %in% c("Respondents", 
+                                                       stressJctSheet,
+                                                       favSpotSheet,
+                                                       unfavSpotSheet)]
+  routes <- lapply(route_sheet_names, function(sheet) {
+    data <- read_excel(surveyFile, sheet = sheet)
+    data$destination <- sheet  # add sheet name as a new column
+    return(data)
+  }) %>%
+    bind_rows() %>%
+    filter(!is.na(WKT) & WKT != "") %>%  # omit if no geometry (n = 6)
+    mutate(routeID = row_number()) %>%
+    dplyr::select(routeID, RespondentID = `Respondent ID`, WKT, destination)
+}
 
 # convert the route column to wkt (not needed where it's already wkt)
 # for (i in 1:nrow(routes)) {
@@ -139,13 +203,11 @@ removeLoops <- function(selected.nodes, route) {
   idx_to_omit <- c()
   
   # don't eliminate if start and end nodes are the same, or other where manual
-  # checking revealed a large loop component
+  # checking revealed a large loop component (circular routes)
   if (!(selected.nodes[1] == selected.nodes[length(selected.nodes)] &
         length(selected.nodes > 2)) &
-      # manual (maps 353, 376, 542, 554, 517, 66)
-      !(route$routeID %in% c("7bep8cwz3fb6_2", "7l9g4utj97r6_1",
-                             "9vl86ffx3ue4_1", "9yr2zbt7i4s6_1",
-                             "9pt99buo346p_1", "2t66ibj3wkt8_1"))) {
+      # manually-identified circular routes
+      !(route$routeID %in% circularRoutes)) {
     
     for (j in 2:length(selected.nodes)) {
       previous_nodes = selected.nodes[1:j-1]
@@ -178,7 +240,7 @@ routes_networked_base <- routes_sf %>%
          network_edges = "")
 
 # setup for parallel processing - detect available cores and create cluster
-cores <- detectCores()
+cores <- min(detectCores(), 8)  # reduce value if memory problems
 cluster <- parallel::makeCluster(cores)
 doSNOW::registerDoSNOW(cluster)
 
@@ -208,18 +270,43 @@ routes_networked <-
               st_as_sf(coords = c("X", "Y"), crs = networkCrs)
             
             # find nearest node to each vertex
-            nearest_nodes_start <- 
-              cyclable.from.nodes$id[st_nearest_feature(vertices[1,], cyclable.from.nodes)]
-            if(nrow(vertices) > 2) {
-              second_last = nrow(vertices) - 1
-              nearest_nodes_mid <- 
-                cyclable.both.nodes$id[st_nearest_feature(vertices[2:second_last, ], cyclable.both.nodes)]
-            } else {
-              nearest_nodes_mid <- c()
+            if (city == "Melbourne") {
+              # nearest node - suitable for simplified network with more-densified nodes (eg 200m)
+              nearest_nodes_start <- 
+                cyclable.from.nodes$id[st_nearest_feature(vertices[1,], cyclable.from.nodes)]
+              if(nrow(vertices) > 2) {
+                second_last = nrow(vertices) - 1
+                nearest_nodes_mid <- 
+                  cyclable.both.nodes$id[st_nearest_feature(vertices[2:second_last, ], cyclable.both.nodes)]
+              } else {
+                nearest_nodes_mid <- c()
+              }
+              nearest_nodes_end <- 
+                cyclable.to.nodes$id[st_nearest_feature(vertices[nrow(vertices),], cyclable.to.nodes)]
+              nearest_nodes <- c(nearest_nodes_start, nearest_nodes_mid, nearest_nodes_end)
+              
+            } else if (city == "Bendigo") {
+              # nearest node on nearest link - suitable for unsimplified network with less-densified nodes (eg 500m)
+              nearest_links <- cyclable.links[st_nearest_feature(vertices, cyclable.links),]
+              nearest_nodes <- c()
+              for (j in 1:nrow(vertices)) {
+                vertex <- vertices[j, ]
+                nearest_link <- nearest_links[j, ]
+                if (j == 1) {
+                  eligible.nodes <- cyclable.from.nodes %>%
+                    filter(id == nearest_link$from_id | id == nearest_link$to_id)
+                } else if (j == nrow(vertices)) {
+                  eligible.nodes <- cyclable.to.nodes %>%
+                    filter(id == nearest_link$from_id | id == nearest_link$to_id)
+                } else {
+                  eligible.nodes <- cyclable.both.nodes %>%
+                    filter(id == nearest_link$from_id | id == nearest_link$to_id)
+                }
+                nearest_node <- eligible.nodes$id[st_nearest_feature(vertex, eligible.nodes)]
+                nearest_nodes <- c(nearest_nodes, nearest_node)
+              }
             }
-            nearest_nodes_end <- 
-              cyclable.to.nodes$id[st_nearest_feature(vertices[nrow(vertices),], cyclable.to.nodes)]
-            nearest_nodes <- c(nearest_nodes_start, nearest_nodes_mid, nearest_nodes_end)
+            
             vertices <- cbind(vertices, nearest_nodes)
             
             # eliminate any sections that return to a pre-used node
@@ -301,15 +388,31 @@ routes_networked <-
 close(pb)
 stopCluster(cluster)
 
+# comments for Bendigo routes (determined by manual inspection)
+if (city == "Bendigo") {
+  routes_networked <- routes_networked %>%
+    mutate(comment = case_when(
+      routeid %in% c(8, 9, 11, 15, 17, 33, 68, 75, 77, 79, 83, 93, 106, 123, 125, 
+                     146, 171, 178, 180, 197, 199, 200, 203, 209, 251, 259, 268, 
+                     283, 287, 288, 289, 297, 300, 301, 303, 307, 311, 313, 316, 
+                     321, 331, 332, 350, 351, 353, 356, 357, 358, 359, 360, 375, 
+                     377, 379, 380, 383, 387, 388, 389, 390, 395, 397, 415, 419, 
+                     434, 435) ~ "unreliable straight lines",
+      routeid %in% c(144, 176, 314, 374) ~ "unreliable scribble",
+      routeid %in% c(73, 151, 194, 195, 196, 223, 229) ~ "no route, too short"
+    ))
+}
+
 # save output
-st_write(routes_networked, "./data/routes_networked.sqlite", 
+st_write(routes_networked, outputRoutes, 
          layer = "survey", delete_layer = TRUE)
+
 
 
 # 4 Output paths  ----
 # -----------------------------------------------------------------------------#
 # reload routes (note code below assumes re-loading sqlite has converted column names to lower case)
-routes_networked <- st_read("./data/routes_networked.sqlite", layer = "survey")
+routes_networked <- st_read(outputRoutes, layer = "survey")
 
 # empty sf objects
 routes_networked_paths <- st_sf(geometry = st_sfc(), 
@@ -355,9 +458,9 @@ for (i in 1:nrow(routes_networked)) {
 }
 
 # write output
-st_write(routes_networked_paths, "./data/routes_networked.sqlite", 
+st_write(routes_networked_paths, outputRoutes, 
          layer = "networked", delete_layer = TRUE)
-st_write(routes_networked_startpoints, "./data/routes_networked.sqlite",
+st_write(routes_networked_startpoints, outputRoutes,
          layer = "startpoints", delete_layer = TRUE)
 
 
@@ -370,10 +473,10 @@ if (!dir.exists(outputMapDir)) {
 }
 
 # reload routes (note code below assumes re-loading sqlite has converted column names to lower case)
-routes_networked <- st_read("./data/routes_networked.sqlite", layer = "survey")
+routes_networked <- st_read(outputRoutes, layer = "survey")
 
 # setup for parallel processing - detect available cores and create cluster
-cores <- detectCores()
+cores <- min(detectCores(), 8)  # reduce value if memory problems
 cluster <- parallel::makeCluster(cores)
 doSNOW::registerDoSNOW(cluster)
 
@@ -489,11 +592,13 @@ stopCluster(cluster)
 
 # 6 Routes passing through stressful junctions  ----
 # -----------------------------------------------------------------------------#
+# NOTE - THIS SECTION NOT CONFIGURED FOR BENDIGO (YET)
+
 # load network nodes
 nodes <- st_read(networkFile, layer = nodeLayer)
 
 # load routes
-routes <- st_read("./data/routes_networked.sqlite", layer = "survey")
+routes <- st_read(outputRoutes, layer = "survey")
 
 # read in  stressful junction file, and convert to sf object
 stressJct<- read.csv(stressJctFile) %>%
@@ -552,6 +657,8 @@ st_write(stressJct, "./data/stressJct.sqlite", delete_layer = TRUE)
 
 # 7 Favourite spot land types  ----
 # -----------------------------------------------------------------------------#
+# NOTE - THIS SECTION NOT CONFIGURED FOR BENDIGO (YET)
+
 # read in nodes (just used for CRS)
 nodes <- st_read(networkFile, layer = nodeLayer)
 
@@ -592,41 +699,47 @@ write.csv(favSpotOutput, "./data/favSpotLandType.csv", row.names = FALSE)
 # per link in each trip, and network details attached
 
 # read in routes_networked and network links
-routes_networked <- st_read("./data/routes_networked.sqlite", layer = "survey")
+routes_networked <- st_read(outputRoutes, layer = "survey")
 links <- st_read(networkFile, layer = linkLayer)
 
 # expand routes_network by adding details listed below from links
 routes_networked_expanded <- 
   expandRoutes(routes_networked %>%
                  st_drop_geometry() %>%
-                 dplyr::select(routeid, respondent.id, destination, network_edges),
+                 dplyr::select(any_of(c("routeid", "respondent.id", "respondentid", 
+                                      "destination", "network_edges"))),
                links %>% 
                  st_drop_geometry() %>%
-                 dplyr::select(link_id, length, highway, cycleway, freespeed,
-                               surface, slope_pct, ndvi, ndvi_md, ndvi_75, ndvi_90,
-                               adt, lvl_traf_stress))
+                 dplyr::select(any_of(c("link_id", "length", "highway", "cycleway", "freespeed",
+                               "surface", "slope_pct", "ndvi", "ndvi_md", "ndvi_75", "ndvi_90",
+                               "tcc_buffer", "tcc_percent",
+                               "adt", "lvl_traf_stress"))))
 
 
 # write output
-write.csv(routes_networked_expanded, "./data/routes_networked_expanded.csv",
+write.csv(routes_networked_expanded, outputRoutesExpanded,
           row.names = FALSE)
 
 
 # 9 Equivalent shortest paths  ----
 # -----------------------------------------------------------------------------#
+# NOTE - THIS SECTION NOT CONFIGURED FOR BENDIGO (YET)
+# Note that for Bendigo, the graph might need adjustment, as it is not exactly 
+# 'shortest' due to cycleway adjustments
+
 ## 9.1 Shortest paths ----
 ## ------------------------------------#
 # read in routes_networked and network
-routes_networked <- st_read("./data/routes_networked.sqlite", layer = "survey") %>%
+routes_networked <- st_read(outputRoutes, layer = "survey") %>%
   # remove geometry (which is the geometry drawn by the participant)
   st_drop_geometry %>%
   # keep required fields
-  dplyr::select(routeid, respondent.id, destination, network_nodes)
+  dplyr::select(any_of(c("routeid", "respondent.id", "respondentid", "destination", "network_nodes")))
 
 # RUN SECTION 1, to read in network and create cyclable network graph ('graph')
 
 # setup for parallel processing - detect available cores and create cluster
-cores <- detectCores()
+cores <- min(detectCores(), 8)  # reduce value if memory problems
 cluster <- parallel::makeCluster(cores)
 doSNOW::registerDoSNOW(cluster)
 

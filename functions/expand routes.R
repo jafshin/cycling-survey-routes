@@ -6,11 +6,14 @@ expandRoutes <- function(input.routes, input.links) {
   
   # input.routes = routes_networked %>%
   #   st_drop_geometry() %>%
-  #   dplyr::select(routeid, respondent.id, destination, network_edges)
+  #   dplyr::select(any_of(c("routeid", "respondent.id", "respondentid", 
+  #                          "destination", "network_edges")))
   # input.links = links %>% 
   #   st_drop_geometry() %>%
-  #   dplyr::select(link_id, length, highway, cycleway,
-  #                 surface, slope_pct, ndvi)
+  #   dplyr::select(any_of(c("link_id", "length", "highway", "cycleway", "freespeed",
+  #                          "surface", "slope_pct", "ndvi", "ndvi_md", "ndvi_75", "ndvi_90",
+  #                          "tcc_buffer", "tcc_percent",
+  #                          "adt", "lvl_traf_stress")))
   
   # empty dataframe to hold output
   routes_expanded_base <- data.frame()
@@ -22,8 +25,8 @@ expandRoutes <- function(input.routes, input.links) {
     
     # vector of network edges (assumed to be in 'network_edges' field)
     network_edges <- str_split(row$network_edges, ", ") %>% 
-      unlist() #%>% 
-      # as.numeric()
+      unlist() %>% 
+      as.numeric()
     
     # repeat the row multiple times, once for each edge, with leg no and link id
     df <- row %>%
@@ -42,7 +45,7 @@ expandRoutes <- function(input.routes, input.links) {
   # join details from links
   routes_expanded <- routes_expanded_base %>%
     left_join(input.links,
-              by =  "link_id")
+              by =  "link_id", relationship = "many-to-many")
   
   return(routes_expanded)
   
