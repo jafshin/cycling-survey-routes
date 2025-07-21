@@ -26,7 +26,7 @@ expandRoutes <- function(input.routes, input.links) {
     # vector of network edges (assumed to be in 'network_edges' field)
     network_edges <- str_split(row$network_edges, ", ") %>% 
       unlist() %>% 
-      as.numeric()
+      as.numeric()  # may need to be commented out, or changed, if it causes errors
     
     # repeat the row multiple times, once for each edge, with leg no and link id
     df <- row %>%
