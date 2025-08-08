@@ -37,3 +37,5 @@ The main difference between the `bendigo` and `main` branches is that the `bendi
 Other changes reflect other differences (for example, in attributes) between the Bendigo and Melbourne networks.
 
 In the `bendigo` branch, `process routes.R` is set up with choice of city (Melbourne or Bendigo) as an option.  If 'Melbourne' is selected, the script runs in the same way as for the main branch.  If 'Bendigo' is selected, then the changes implemented for Bendigo will apply.
+
+The `bendigo` branch also includes `choice set.R`, which selects alternative routes for mode choice modelling.
