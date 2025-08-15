@@ -67,19 +67,21 @@ SURVEY_ROUTE_FILE <- "../Bendigo survey/routes_networked.sqlite"
 SURVEY_ROUTE_LAYER <- "survey"
 
 # commonality ceiling (max level of commonality), targets, etc
-COMMONALITY.CEILING <- 0.95  # ie at least 5% difference
+# COMMONALITY.CEILING <- 0.95  # ie at least 5% difference
+COMMONALITY.CEILING <- 0.8  # ie at least 20% difference
 BFSLE.TARGET <- 5  # no of BFSLE routes to find
 RAND.TARGET <- 5  # no of random weight routes to find
-RAND.MAX.ITERATIONS <- 100  # no of iterations of random loop before exit
+RAND.MAX.ITERATIONS <- 500  # no of iterations of random loop before exit
 
 # output directories and files
 OUTPUT.DIR <- "../Bendigo survey/choice set"
 OUTPUT.MAP.SUBDIR <- "/output maps"
 if (!dir.exists(OUTPUT.DIR)) dir.create(OUTPUT.DIR)
 if (!dir.exists(paste0(OUTPUT.DIR, OUTPUT.MAP.SUBDIR))) dir.create(paste0(OUTPUT.DIR, OUTPUT.MAP.SUBDIR))
-OUTPUT.CHOICE.SET.FILE <- paste0(OUTPUT.DIR, "./choice_set.sqlite")
-OUTPUT.BFSLE.DISCARD.FILE <- paste0(OUTPUT.DIR, "./bfsle_discards.csv")
-OUTPUT.RAND.DISCARD.FILE <- paste0(OUTPUT.DIR, "./rand_discards.csv")
+OUTPUT.CHOICE.SET.FILE <- paste0(OUTPUT.DIR, "/choice_set.sqlite")
+OUTPUT.BFSLE.DISCARD.FILE <- paste0(OUTPUT.DIR, "/bfsle_discards.csv")
+OUTPUT.RAND.DISCARD.FILE <- paste0(OUTPUT.DIR, "/rand_discards.csv")
+CHOICE.SET.EXPANDED.FILE <- paste0(OUTPUT.DIR, "/choice_set_expanded.csv")
 
 # 1 Load and set up data ----
 # -----------------------------------------------------------------------------#
@@ -112,13 +114,9 @@ OUTPUT.RAND.DISCARD.FILE <- paste0(OUTPUT.DIR, "./rand_discards.csv")
 all.links <- st_read(NETWORK_FILE, layer = LINK_LAYER)
 all.nodes <- st_read(NETWORK_FILE, layer = NODE_LAYER)
 
-# exclude all links that are motorways, unless they are specifically tagged as
-# cyclable or walkable; exclude public transport
+# exclude all non-cyclable links
 all.cyclable.links <- all.links %>%
-  filter(!highway %in% c("motorway", "motorway_link") | 
-           (highway %in% c("motorway", "motorway_link") & 
-              (str_detect(modes, "walk") | str_detect(modes, "bike")))) %>%
-  filter(!highway %in% c("train", "tram", "bus"))
+  filter(is_cycle == 1)
 
 all.cyclable.nodes <- all.nodes %>%
   filter(id %in% all.cyclable.links$from_id | id %in% all.cyclable.links$to_id)
@@ -126,6 +124,9 @@ all.cyclable.nodes <- all.nodes %>%
 # keep largest connected network
 largest.component <- largestConnectedComponent(all.cyclable.nodes, all.cyclable.links)
 cyclable.links <- largest.component[[2]]
+cyclable.nodes <- largest.component[[1]]
+cyclable.from.nodes <- cyclable.nodes %>% filter(id %in% cyclable.links$from_id)
+cyclable.to.nodes <- cyclable.nodes %>% filter(id %in% cyclable.links$to_id)
 
 # prepare links with required weights
 links <- cyclable.links %>%
@@ -162,9 +163,6 @@ weight_fields <- c("short", "infra", "speed", "flat", "green", "lts")
 # get the crs of the network (so routes can be in same crs)
 networkCrs <- st_crs(links)
 
-# remove network preparation dataframes where not needed
-rm(all.links, all.cyclable.links, all.cyclable.nodes, largest.component, cyclable.links)
-
 # add links to database as 'links'
 dbExecute(con, "DROP TABLE IF EXISTS links;")
 st_write(links %>%
@@ -180,19 +178,43 @@ dbExecute(con, "CREATE INDEX links_gix ON links USING GIST (geom);")
 ## 1.2 Survey routes ----
 ## ------------------------------------# 
 
-# load survey routes, as networked
+# load survey routes, as networked - but adjust starting point if not cyclable
 survey_routes <- st_read(SURVEY_ROUTE_FILE, layer = SURVEY_ROUTE_LAYER) %>%
   
   # extract first and last nodes (node string broken at string followed by optional spaces)
   mutate(start_node = as.integer(stringr::word(network_nodes, 1, sep = ",\\s*")),
          end_node = as.integer(stringr::word(network_nodes, -1, sep = ",\\s*")))
 
+# but, if not in cyclable nodes, then pick closest replacement (eg where starts/ends on footpath)
+for (i in 1:nrow(survey_routes)) {
+  
+  if (!survey_routes$start_node[i] %in% cyclable.to.nodes$id) {
+    old.node <- all.nodes %>% filter(id == survey_routes$start_node[i])
+    new.node <- cyclable.from.nodes[st_nearest_feature(old.node, cyclable.from.nodes), ]
+    survey_routes$start_node[i] <- new.node$id
+  }
+  
+  if (!survey_routes$end_node[i] %in% cyclable.from.nodes$id) {
+    old.node <- all.nodes %>% filter(id == survey_routes$end_node[i])
+    new.node <- cyclable.to.nodes[st_nearest_feature(old.node, cyclable.to.nodes), ]
+    survey_routes$end_node[i] <- new.node$id
+  }
+}  
+
 # add survey routes to database as 'combinations'
 dbExecute(con, "DROP TABLE IF EXISTS combinations;")
 st_write(survey_routes %>%
            st_drop_geometry() %>%
-           dplyr::select(routeid, source = start_node, target = end_node),
+           mutate(source = as.integer(start_node), target = as.integer(end_node)) %>%
+           dplyr::select(routeid, source, target),
          con, layer = "combinations")
+
+
+## 1.3 Remove network preparation dataframes where not needed, to save memory
+## ------------------------------------# 
+
+rm(all.links, all.cyclable.links, all.cyclable.nodes, largest.component, 
+   cyclable.links, cyclable.nodes, cyclable.from.nodes, cyclable.to.nodes)
 
 
 # 2 Routing - preferred attributes ----
@@ -232,7 +254,7 @@ for (i in seq_along(weight_fields)) {
 }
 
 
-# 3 Routing - BFSLE ----
+xz# 3 Routing - BFSLE ----
 # -----------------------------------------------------------------------------#
 
 # This section finds routes using breadth-first search on link elimination (BFSLE)
@@ -397,7 +419,7 @@ for (i in 1:nrow(survey_routes)) {
 write.csv(bfsle.discards, OUTPUT.BFSLE.DISCARD.FILE, row.names = FALSE)
           
 
-# 4 Routing - random weights ----
+# 4 Routing - random weight perturbation ----
 # -----------------------------------------------------------------------------#
 
 # This section finds routes using random multipliers for link length
@@ -422,7 +444,7 @@ dbExecute(con, delete.statement)
 iterations <- 0
 
 # loop to find random weight routes (depends on number of rows in 'combinations')
-while (iterations < 100) {
+while (iterations < RAND.MAX.ITERATIONS) {
   
   # alter length randomly by multiplying by 1, 2 or 3:
   # random() generates float in [0, 1); random() * 3 gives a float in [0, 3);
@@ -528,8 +550,11 @@ st_write(choice_set, OUTPUT.CHOICE.SET.FILE, delete_layer = TRUE)
 # 5 Visualise outputs ----
 # -----------------------------------------------------------------------------#
 
+# This section prints a set of maps, one for each survey route, showing its choice set
+
 # reload survey and choice set routes 
-survey.routes <- st_read(SURVEY_ROUTE_FILE, layer = SURVEY_ROUTE_LAYER)
+survey.routes <- st_read(SURVEY_ROUTE_FILE, layer = SURVEY_ROUTE_LAYER) %>%
+  st_set_geometry("geom")
 choice_set <- st_read(OUTPUT.CHOICE.SET.FILE) %>%
   st_set_geometry("geom")
 
@@ -557,6 +582,8 @@ output <-
             
             # selected routeid and routes
             route.id <- unique(choice_set$routeid)[i]
+            
+            survey.route <- survey.routes %>% filter(routeid == route.id)
             
             routes <- choice_set %>% filter(routeid == route.id) %>%
               
@@ -590,7 +617,7 @@ output <-
             map.filename <- paste0("map_choice_set_routeid", route.id)
             
             # bounding box
-            route_bbox <- st_bbox(st_union(routes)) %>%
+            route_bbox <- st_bbox(st_union(bind_rows(routes, survey.route))) %>%
               st_as_sfc() %>%
               st_buffer(., sqrt(as.numeric(st_area(.)))/10)
             
@@ -603,11 +630,12 @@ output <-
               map.zoom = 13
             }
             
-            # create color palette, take 9, order darkest first, use required no
+            # create color palette, darkest out of palette of 9 (take 9, reverse them so darkest first,
+            # select first 5 or 6 of the 9, then reverse again so lightest is first)
             colors <- c(
-              rev(RColorBrewer::brewer.pal(n = 9, name = "Greens"))[1:nrow(routes %>% filter(group == "pref"))],
-              rev(RColorBrewer::brewer.pal(n = 9, name = "Oranges"))[1:nrow(routes %>% filter(group == "bfsle"))],
-              rev(RColorBrewer::brewer.pal(n = 9, name = "Purples"))[1:nrow(routes %>% filter(group == "rand"))]
+              rev(rev(RColorBrewer::brewer.pal(n = 9, name = "Greens"))[1:nrow(routes %>% filter(group == "pref"))]),
+              rev(rev(RColorBrewer::brewer.pal(n = 9, name = "Oranges"))[1:nrow(routes %>% filter(group == "bfsle"))]),
+              rev(rev(RColorBrewer::brewer.pal(n = 9, name = "Purples"))[1:nrow(routes %>% filter(group == "rand"))])
             )
             names(colors) <- routes$identifier
             
@@ -629,7 +657,7 @@ output <-
               scale_color_manual(values = colors, name = "generated routes") +
               
               # survey route and start / end points
-              geom_sf(data = survey.routes %>% filter(routeid == route.id),
+              geom_sf(data = survey.route,
                       aes(color = "surveyed route"), linewidth = 0.5) +
               geom_sf(data = starting.point, aes(color = "start/end point"), size = 3) +
               geom_sf(data = ending.point, aes(color = "start/end point"), size = 3) +
@@ -669,7 +697,9 @@ stopCluster(cluster)
 
 # 6 Discard analysis plots ----
 # -----------------------------------------------------------------------------#
-# TO BE TESTED
+
+# This section prints plots of the distribution of the numbrs of discards 
+# in finding the BFSLE and Rand routes
 
 # read in discard files
 bfsle.discards <- read.csv(OUTPUT.BFSLE.DISCARD.FILE)
@@ -699,5 +729,31 @@ ggsave(paste0(OUTPUT.DIR, "/bfsle_discard_plot.png"), bflse.discard.plot,
 ggsave(paste0(OUTPUT.DIR, "/rand_discard_plot.png"), rand.discard.plot, 
        width = 15, height = 12, units = "cm")
 
+
+# 7 Expanded choice set routes  ----
+# -----------------------------------------------------------------------------#
+# This section creates atable which is an expanded version of 'choice_set', 
+# with one row per link in each trip, and network details attached
+
+# read in routes_networked and network links
+choice_set <- st_read(OUTPUT.CHOICE.SET.FILE) %>%
+  st_set_geometry("geom")
+all.links <- st_read(NETWORK_FILE, layer = LINK_LAYER)
+
+# expand routes_network by adding details listed below from links
+choice_set_expanded <- 
+  expandRoutes(choice_set %>%
+                 st_drop_geometry() %>%
+                 dplyr::select(any_of(c("routeid", "routeid_type", "network_edges"))),
+               all.links %>% 
+                 st_drop_geometry() %>%
+                 dplyr::select(any_of(c("link_id", "length", "highway", "cycleway", "freespeed",
+                                        "surface", "slope_pct", "ndvi", "ndvi_md", "ndvi_75", "ndvi_90",
+                                        "tcc_buffer", "tcc_percent",
+                                        "adt", "lvl_traf_stress"))))
+
+
+# write output
+write.csv(choice_set_expanded, CHOICE.SET.EXPANDED.FILE, row.names = FALSE)
 
 
