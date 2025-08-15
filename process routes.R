@@ -388,21 +388,6 @@ routes_networked <-
 close(pb)
 stopCluster(cluster)
 
-# comments for Bendigo routes (determined by manual inspection)
-if (city == "Bendigo") {
-  routes_networked <- routes_networked %>%
-    mutate(comment = case_when(
-      routeid %in% c(8, 9, 11, 15, 17, 33, 68, 75, 77, 79, 83, 93, 106, 123, 125, 
-                     146, 171, 178, 180, 197, 199, 200, 203, 209, 251, 259, 268, 
-                     283, 287, 288, 289, 297, 300, 301, 303, 307, 311, 313, 316, 
-                     321, 331, 332, 350, 351, 353, 356, 357, 358, 359, 360, 375, 
-                     377, 379, 380, 383, 387, 388, 389, 390, 395, 397, 415, 419, 
-                     434, 435) ~ "unreliable straight lines",
-      routeid %in% c(144, 176, 314, 374) ~ "unreliable scribble",
-      routeid %in% c(73, 151, 194, 195, 196, 223, 229) ~ "no route, too short"
-    ))
-}
-
 # save output
 st_write(routes_networked, outputRoutes, 
          layer = "survey", delete_layer = TRUE)
