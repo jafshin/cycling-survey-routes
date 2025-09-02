@@ -1,0 +1,489 @@
+---
+title: "Cycling survey results"
+author: "Steve"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(fs)
+library(readxl)
+library(scales)
+
+plot_folder <- "../Bendigo survey/plots"
+if (!dir.exists(plot_folder)) dir_create(plot_folder)
+
+```
+
+```{r load_data, message=FALSE}
+surveyFile <- "../Bendigo survey/responses-8gi6nyx69dt6-2025-07-10T04_40_41.798Z.xlsx"
+
+sheet_names <- excel_sheets(surveyFile)
+
+spot_sheet_names <- c("Most stressful intersection(s) ",
+                      "My favorite spot(s) along the r",
+                      "My least favorite spot(s) along")
+
+route_sheet_names <- sheet_names[!sheet_names %in% c("Respondents", 
+                                                     spot_sheet_names)]
+
+respondents <- read_excel(surveyFile, sheet = "Respondents")
+
+routes <- lapply(route_sheet_names, function(sheet) {
+  data <- read_excel(surveyFile, sheet = sheet)
+  data$destination <- sheet  # add sheet name as a new column
+  return(data)
+}) %>%
+  bind_rows()
+
+spots <-  lapply(spot_sheet_names, function(sheet) {
+  data <- read_excel(surveyFile, sheet = sheet)
+  data$type <- sheet  # add sheet name as a new column
+  return(data)
+}) %>%
+  bind_rows()
+
+
+```
+
+# Introduction
+TO DO
+
+# Sociodemographic characteristics
+This section provides general information about the survey participants.
+
+## Ridership
+
+```{r}
+q <- respondents %>% select(starts_with("Are you a bicycle rider")) %>% names()
+
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "once a week")  ~ "Weekly",
+    str_detect(x, "once a month") ~ "Monthly",
+    str_detect(x, "occasionally") ~ "Occasionally",
+    str_detect(x, "not cycled")   ~ "Not cycled",
+    is.na(x)                      ~ "Did not answer",
+    TRUE                          ~ NA_character_
+  )
+}
+data <- respondents %>%
+  select(all_of(q)) %>%
+  mutate(category = categorise(.data[[q]])) %>%
+  mutate(category = factor(category,
+                           levels = c("Weekly", "Monthly", "Occasionally",
+                                      "Not cycled", "Did not answer")))
+responses <- respondents %>%
+  distinct(response = .data[[q]]) %>%
+  mutate(category = categorise(response))
+
+caption_text <- responses %>%
+  arrange(factor(category,
+                 levels = c("Weekly","Monthly","Occasionally",
+                            "Not cycled","Did not answer"))) %>%
+  mutate(full = paste0(category, ": '", response, "'")) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+valid_responses <- respondents %>%
+  mutate(category = categorise(.data[[q]])) %>%
+  filter(category %in% c("Weekly", "Monthly", "Occasionally"))
+```
+
+**`r q`**
+
+```{r}
+
+plot <- ggplot(data, aes(x = category)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Category",
+    y       = "Number of respondents",
+    caption = caption_text
+  ) +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0))
+
+plot
+ggsave(paste0(plot_folder, "/1.0 ridership.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+Out of `r nrow(respondents)` survey participants, `r nrow(respondents) - nrow(valid_responses)` answered that they had not cycled in the past year, or did not answer. These were excluded from further survey questions.
+
+The results presented below for the remainder of the sociodemographic questions exclude participants who did not answer the relevant question.
+
+
+## Gender
+
+```{r}
+q <- respondents %>% select(starts_with("1.1")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(gender = factor(.data[[q]],
+                         levels = c("Woman/Female", "Man/Male", 
+                                    "Other", "Prefer not to say")))
+
+```
+
+**`r q`**
+
+```{r}
+
+plot <- ggplot(data, aes(x = gender)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Gender",
+    y       = "Number of participants"
+  ) +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0))
+
+plot
+ggsave(paste0(plot_folder, "/1.1 gender.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+## Age
+
+```{r, warning=FALSE}
+q <- respondents %>% select(starts_with("1.2")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  
+  # anomalous answers - assign midpoint
+  mutate(age_num = case_when(
+    str_detect(.data[[q]], "Mid 40s") ~ 45,
+    str_detect(.data[[q]], "50’s") ~ 55,
+    TRUE ~ as.numeric(.data[[q]])
+  )) %>%
+  # ambiguous answers/errors (60+, 565) - exclude
+  filter(!is.na(age_num) & age_num <= 100) %>%
+  
+  mutate(age_group = cut(
+  age_num,
+      breaks = c(17, 20, 30, 40, 50, 60, 70, 80, Inf),
+      labels = c("18-20", "21-30", "31-40", "41-50",
+                 "51-60", "61-70", "71-80", "80+"),
+      right = TRUE,   # intervals are closed on the right
+      include.lowest = TRUE
+    ))
+    
+```
+
+**`r q`**
+
+```{r}
+plot <- ggplot(data, aes(x = age_group)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Age group",
+    y = "Number of participants"
+  ) +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/1.2 age.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+## Living arrangements
+
+```{r}
+q <- respondents %>% select(starts_with("1.3")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(living_arrangement = .data[[q]] %>%
+           fct_infreq() %>%  # order by frequency (largest first)
+           fct_rev() %>%   # reverse so largest is on top in horizontal bar chart
+           fct_relevel("Prefer not to say", after = 0)# push to first (bottom in horizontal bars)
+  )
+    
+```
+
+**`r q`**
+
+```{r}
+plot <- ggplot(data, aes(x = living_arrangement)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Living arrangement",
+    y = "Number of participants"
+  ) +
+  coord_flip() +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/1.3 living.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+## Cars
+
+```{r}
+q <- respondents %>% select(starts_with("1.4")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(num_cars = factor(.data[[q]], 
+                           levels = sort(unique(.data[[q]])))) 
+    
+```
+
+**`r q`**
+
+```{r}
+plot <- ggplot(data, aes(x = num_cars)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Number of cars",
+    y = "Number of participants"
+  ) +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/1.4 cars.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+## Bicycles
+
+```{r}
+q <- respondents %>% select(starts_with("1.5")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(num_bikes = factor(.data[[q]], 
+                           levels = sort(unique(.data[[q]])))) 
+    
+```
+
+**`r q`**
+
+```{r}
+plot <- ggplot(data, aes(x = num_bikes)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Number of bicycles",
+    y = "Number of participants"
+  ) +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/1.5 bikes.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+## Educational qualifications
+
+```{r}
+q <- respondents %>% select(starts_with("1.6")) %>% names()
+col_names <- names(respondents)
+next_col <- col_names[which(col_names == q) + 1]
+
+categorise <- function(x, y) {
+  case_when(
+    str_detect(x, "Year 10")         ~ "Year 10 or less",
+    x == "Other" & (str_detect(y, "11") | str_detect(y, "12")) ~ "Year 11 or 12",
+    str_detect(x, "Diploma") ~ "Diploma/certificate",
+    str_detect(x, "Undergraduate")   ~ "Undergraduate",
+    str_detect(x, "Postgraduate")    ~ "Postgraduate",
+    x == "Other"                     ~ "Other",
+    TRUE                             ~ NA_character_
+  )
+}
+
+data <- valid_responses %>%
+  select(all_of(c(q, next_col))) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(qualif = categorise(.data[[q]], .data[[next_col]])) %>%
+  mutate(qualif = factor(qualif,
+                           levels = c("Year 10 or less", "Year 11 or 12", "Diploma/certificate",
+                                      "Undergraduate", "Postgraduate", "Other")))
+
+responses <- data %>%
+  distinct() %>%
+  rename(response = 1) %>%arrange(qualif) %>%
+  filter(str_detect(qualif, "Diploma") | str_detect(qualif, "Undergraduate") | 
+           str_detect(qualif, "Postgraduate"))
+
+caption_text <- responses %>%
+  arrange(factor(qualif,
+                 levels = c("Diploma/certificate", "Undergraduate", "Postgraduate"))) %>%
+  mutate(full = paste0(qualif, ": '", response, "'")) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+```
+
+**`r q`**
+
+```{r}
+plot <- ggplot(data, aes(x = qualif)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Educational qualification",
+    y = "Number of participants",
+    caption = caption_text
+  ) +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0))
+
+plot
+ggsave(paste0(plot_folder, "/1.6 qualification.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+## Occupation
+
+```{r}
+q <- respondents %>% select(starts_with("1.7")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]]) & !(.data[[q]] == "-")) %>%
+  mutate(occup = tolower(.data[[q]])) %>%
+  mutate(occup = case_when(
+    str_detect(occup, "retired") & !str_detect(occup, "semi") ~ "retired",
+    occup == "admin" ~ "administration",
+    occup == "physio" ~ "physiotherapist",
+    TRUE             ~ occup
+  )) %>%
+  mutate(occup = str_to_sentence(occup)) %>%
+  mutate(occup = case_when(
+    occup == "Ceo"                           ~ "CEO",
+    occup == "Council officer (not cogb)"    ~ "Council officer (not CoGB)",
+    occup == "Early support coordinator - transport accident commission" ~
+      "Early support coordinator - Transport Accident Commission",
+    occup == "Gis officer"                   ~ "GIS officer",
+    occup == "It administrator/ gis analyst" ~ "IT administrator / GIS analyst",
+    occup == "Gp"                            ~ "GP",
+    occup == "Mri applications specialist"   ~ "MRI applications specialilst",
+    occup == "Public servant dtp"            ~ "Public servant DTP",
+    TRUE                                     ~ occup
+  )) %>%
+  group_by(occup) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  arrange(desc(n), occup)
+
+data_plot <- data %>%
+  filter(n >= 3) %>%
+  mutate(occup = occup %>%
+           fct_infreq() %>%  # order by frequency (largest first)
+           fct_rev())  # reverse so largest is on top in horizontal bar chart
+
+others_text <- data %>%
+  filter(n < 3) %>%
+  mutate(text = paste0(occup, " (", n, ")")) %>%
+  distinct(text) %>%
+  arrange(text) %>%
+  pull(text) %>%
+  paste(collapse = ", ")
+
+
+```
+
+**`r q`**
+
+```{r}
+plot <- ggplot(data_plot, aes(x = occup)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Occupation",
+    y = "Number of participants"
+  ) +
+  coord_flip() +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/1.7 occupation.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+Other occupations not included in the plot above: 
+`r others_text`.
+
+## Income
+
+```{r}
+q <- respondents %>% select(starts_with("1.8")) %>% names()
+
+format_income <- function(x) {
+  str_replace_all(x, 
+                  "(\\d+)",  # match any sequence of digits
+                  function(y) paste0("$", comma(as.numeric(y))))
+}
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(income_label = format_income(.data[[q]])) %>%
+  mutate(income_order = case_when(
+    str_detect(income_label, "Below") ~ 0,
+    str_detect(income_label, "Above") ~ 200000,  # arbitrarily above highest range
+    str_detect(income_label, "I prefer") ~ Inf,
+    TRUE ~ as.numeric(str_extract(income_label, "\\d+"))
+  )) %>%
+  mutate(income_label = fct_reorder(income_label, income_order) %>%
+           fct_rev())
+  
+```
+
+**`r q`**
+
+```{r}
+
+plot <- ggplot(data, aes(x = income_label)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Household income",
+    y = "Number of participants"
+  ) +
+  coord_flip() +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/1.8 income.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+# Cycling experiences
+
+This section provides information about routes drawn by participants.
+
+## Route purpose
+Participants were asked to describe the purpose of their route.
+
+```{r}
+
+## TO do - graph of the preferred route categories
+
+```
+
+## Reasons for cycling
+
+
+## Reasons for selecting route
+
+
+
