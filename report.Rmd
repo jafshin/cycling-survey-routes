@@ -49,16 +49,19 @@ spots <-  lapply(spot_sheet_names, function(sheet) {
 ```
 
 # Introduction
-TO DO
+There were `r nrow(respondents)` survey responses, though some were incomplete.  
 
-# Sociodemographic characteristics
+The survey is divided into 3 parts:
+- sociodemographic characteristics
+- cycling experiences
+- cycling preferences
+ 
+# 1. Sociodemographic characteristics
 This section provides general information about the survey participants.
 
 ## Ridership
 
 ```{r}
-q <- respondents %>% select(starts_with("Are you a bicycle rider")) %>% names()
-
 categorise <- function(x) {
   case_when(
     str_detect(x, "once a week")  ~ "Weekly",
@@ -69,6 +72,9 @@ categorise <- function(x) {
     TRUE                          ~ NA_character_
   )
 }
+
+q <- respondents %>% select(starts_with("Are you a bicycle rider")) %>% names()
+
 data <- respondents %>%
   select(all_of(q)) %>%
   mutate(category = categorise(.data[[q]])) %>%
@@ -80,10 +86,10 @@ responses <- respondents %>%
   mutate(category = categorise(response))
 
 caption_text <- responses %>%
+  filter(category != "Did not answer") %>% 
   arrange(factor(category,
-                 levels = c("Weekly","Monthly","Occasionally",
-                            "Not cycled","Did not answer"))) %>%
-  mutate(full = paste0(category, ": '", response, "'")) %>%
+                 levels = c("Weekly", "Monthly", "Occasionally", "Not cycled"))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
   pull(full) %>%
   paste(collapse = "\n")
 
@@ -108,7 +114,7 @@ plot <- ggplot(data, aes(x = category)) +
 
 plot
 ggsave(paste0(plot_folder, "/1.0 ridership.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 ```
 
@@ -117,7 +123,7 @@ Out of `r nrow(respondents)` survey participants, `r nrow(respondents) - nrow(va
 The results presented below for the remainder of the sociodemographic questions exclude participants who did not answer the relevant question.
 
 
-## Gender
+### Gender
 
 ```{r}
 q <- respondents %>% select(starts_with("1.1")) %>% names()
@@ -146,11 +152,11 @@ plot <- ggplot(data, aes(x = gender)) +
 
 plot
 ggsave(paste0(plot_folder, "/1.1 gender.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 ```
 
-## Age
+### Age
 
 ```{r, warning=FALSE}
 q <- respondents %>% select(starts_with("1.2")) %>% names()
@@ -192,11 +198,11 @@ plot <- ggplot(data, aes(x = age_group)) +
 
 plot
 ggsave(paste0(plot_folder, "/1.2 age.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 ```
 
-## Living arrangements
+### Living arrangements
 
 ```{r}
 q <- respondents %>% select(starts_with("1.3")) %>% names()
@@ -230,7 +236,7 @@ ggsave(paste0(plot_folder, "/1.3 living.png"), plot,
 
 ```
 
-## Cars
+### Cars
 
 ```{r}
 q <- respondents %>% select(starts_with("1.4")) %>% names()
@@ -256,11 +262,11 @@ plot <- ggplot(data, aes(x = num_cars)) +
 
 plot
 ggsave(paste0(plot_folder, "/1.4 cars.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 ```
 
-## Bicycles
+### Bicycles
 
 ```{r}
 q <- respondents %>% select(starts_with("1.5")) %>% names()
@@ -286,17 +292,13 @@ plot <- ggplot(data, aes(x = num_bikes)) +
 
 plot
 ggsave(paste0(plot_folder, "/1.5 bikes.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 ```
 
-## Educational qualifications
+### Educational qualifications
 
 ```{r}
-q <- respondents %>% select(starts_with("1.6")) %>% names()
-col_names <- names(respondents)
-next_col <- col_names[which(col_names == q) + 1]
-
 categorise <- function(x, y) {
   case_when(
     str_detect(x, "Year 10")         ~ "Year 10 or less",
@@ -309,6 +311,10 @@ categorise <- function(x, y) {
   )
 }
 
+q <- respondents %>% select(starts_with("1.6")) %>% names()
+col_names <- names(respondents)
+next_col <- col_names[which(col_names == q) + 1]
+
 data <- valid_responses %>%
   select(all_of(c(q, next_col))) %>%
   filter(!is.na(.data[[q]])) %>%
@@ -319,14 +325,15 @@ data <- valid_responses %>%
 
 responses <- data %>%
   distinct() %>%
-  rename(response = 1) %>%arrange(qualif) %>%
+  rename(response = 1) %>%
+  arrange(qualif) %>%
   filter(str_detect(qualif, "Diploma") | str_detect(qualif, "Undergraduate") | 
            str_detect(qualif, "Postgraduate"))
 
 caption_text <- responses %>%
   arrange(factor(qualif,
                  levels = c("Diploma/certificate", "Undergraduate", "Postgraduate"))) %>%
-  mutate(full = paste0(qualif, ": '", response, "'")) %>%
+  mutate(full = paste0(qualif, ": ", response)) %>%
   pull(full) %>%
   paste(collapse = "\n")
 
@@ -347,11 +354,11 @@ plot <- ggplot(data, aes(x = qualif)) +
 
 plot
 ggsave(paste0(plot_folder, "/1.6 qualification.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 ```
 
-## Occupation
+### Occupation
 
 ```{r}
 q <- respondents %>% select(starts_with("1.7")) %>% names()
@@ -422,7 +429,7 @@ ggsave(paste0(plot_folder, "/1.7 occupation.png"), plot,
 Other occupations not included in the plot above: 
 `r others_text`.
 
-## Income
+### Income
 
 ```{r}
 q <- respondents %>% select(starts_with("1.8")) %>% names()
@@ -467,23 +474,638 @@ ggsave(paste0(plot_folder, "/1.8 income.png"), plot,
 
 ```
 
-# Cycling experiences
+# 2. Cycling experiences
 
 This section provides information about routes drawn by participants.
 
-## Route purpose
+### Route purpose
 Participants were asked to describe the purpose of their route.
 
 ```{r}
+clean_destination <- function(x) {
+  x <- case_when(
+    x == "To public transport stop-statio" ~ "To public transport stop/station",
+    TRUE ~ x
+  )
+  x <- gsub("-", "/", x)
+  x <- gsub(", ", "/", x)
+  x <- factor(
+    x,
+    levels = c(
+      "To work/commute", "To college/university/classes",
+      "To shops/tasks/errands", "To visit family/friends",
+      "To public transport stop/station", "To other destinations"
+    )
+  )
+  return(x)
+}
 
-## TO do - graph of the preferred route categories
+data <- routes %>% 
+  dplyr::select(`Respondent ID`, destination, `Please tell us the type of destination:`) %>%
+  mutate(destination = clean_destination(destination) %>%
+           fct_rev())
+
+others_text <- data %>%
+  filter(!is.na(`Please tell us the type of destination:`)) %>%
+  group_by(`Please tell us the type of destination:`) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  mutate(text = ifelse(n > 1,
+                       paste0(`Please tell us the type of destination:`, " (", n, ")"),
+                       `Please tell us the type of destination:`)) %>%
+  distinct(text) %>%
+  arrange(text) %>%
+  pull(text) %>%
+  paste(collapse = "<br>")
+
+
+plot <- ggplot(data, aes(x = destination, fill = destination)) +
+  geom_bar() +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  labs(
+    x = "Trip purpose",
+    y = "Number of participants"
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "none")
+
+plot
+ggsave(paste0(plot_folder, "/2.0 purpose.png"), plot,
+       width = 18, height = 9, units = "cm")
 
 ```
 
-## Reasons for cycling
+Other destinations given:<br>
+`r others_text`
 
 
-## Reasons for selecting route
+### Reasons for cycling
+
+```{r}
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "exercise")   ~ "Exercise",
+    str_detect(x, "enjoy")      ~ "Enjoyment",
+    str_detect(x, "available")  ~ "Availability",
+    str_detect(x, "convenient") ~ "Convenience",
+    str_detect(x, "peers")      ~ "Peers",
+    str_detect(x, "Other")      ~ "Other",
+    TRUE                        ~ NA_character_
+  )
+}
+
+col_names <- names(routes)
+q_cols <- col_names[startsWith(col_names, "1.")]
+last_idx <- which(col_names == tail(q_cols, 1))
+other_col <- col_names[last_idx + 1]  # 'Please specify' column
+other_col2 <- str_replace(other_col, "\\d+$", 
+                          function(n) as.character(as.integer(n) + 1)) # 'Please specify' +1
+
+q <- stringr::str_extract(q_cols[1], "^[^:]+")  # part of col name before colon
+
+responses <- data.frame(
+  response = str_replace(q_cols, "^.*?:\\s*", ""),  # everything after colon
+  stringsAsFactors = FALSE
+) %>%
+  mutate(category = categorise(response))
+
+data <- routes %>% 
+  select(all_of(q_cols), destination) %>%
+  rename_with(~ str_replace(.x, "^.*?:\\s*", "")) %>% 
+  pivot_longer(cols = -destination, names_to = "reason", values_to = "value") %>%
+  filter(value == TRUE) %>%
+  mutate(
+    destination = clean_destination(destination),
+    category = categorise(reason),
+    category = factor(category, levels = c("Exercise", "Enjoyment", "Availability",
+                                            "Convenience", "Peers", "Other"))
+  )
+
+caption_text <- responses %>%
+  filter(response != "Other") %>%
+  arrange(factor(category,
+                 levels = c("Exercise", "Enjoyment", "Availability",
+                                            "Convenience", "Peers", "Other"))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+others_text <- routes %>%
+  select(all_of(c(other_col, other_col2))) %>%
+  pivot_longer(everything(), values_to = "other") %>%
+  select(other) %>%
+  filter(!is.na(other)) %>%
+  group_by(other) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  mutate(text = ifelse(n > 1,
+                       paste0(other, " (", n, ")"),
+                       other)) %>%
+  distinct(text) %>%
+  arrange(text) %>%
+  pull(text) %>%
+  paste(collapse = "<br>")
+
+```
+
+**2.`r q`**
+
+```{r}
+plot <- ggplot(data %>%
+                 mutate(category = fct_rev(category),
+                        destination = fct_rev(destination)), 
+               aes(x = category, fill = destination)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  labs(
+    x = "Reason for cycling",
+    y = "Number of participants",
+    fill = "Trip purpose",
+    caption = caption_text
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0), 
+        legend.position = "bottom") +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+
+plot
+ggsave(paste0(plot_folder, "/2.1.1 reason.png"), plot,
+       width = 18, height = 12, units = "cm")
 
 
+```
+
+Reasons given for 'Other':<br>
+`r others_text`
+
+### Reasons for selecting route
+
+```{r}
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "safe")          ~ "Safe",
+    str_detect(x, "greenery")      ~ "Green",
+    str_detect(x, "flat")          ~ "Flat",
+    str_detect(x, "traffic")       ~ "Traffic",
+    str_detect(x, "intersections") ~ "Intersections",
+    str_detect(x, "speed")         ~ "Speed limits",
+    str_detect(x, "connectivity")  ~ "Connectivity",
+    str_detect(x, "shortest")      ~ "Short",
+    str_detect(x, "cyclists")      ~ "Other cyclists",
+    str_detect(x, "designated")    ~ "Designated",
+    str_detect(x, "Other")         ~ "Other",
+    TRUE                           ~ NA_character_
+  )
+}
+
+col_names <- names(routes)
+q_cols <- col_names[startsWith(col_names, "2.")]
+last_idx <- which(col_names == tail(q_cols, 1))
+other_col <- col_names[last_idx + 1]  # 'Please specify' column
+other_col2 <- str_replace(other_col, "\\d+$", 
+                          function(n) as.character(as.integer(n) + 1)) # 'Please specify' +1
+
+q <- stringr::str_extract(q_cols[1], ".*\\)")  # part of col name before )
+
+responses <- data.frame(
+  response = str_replace(q_cols, "^.*?\\):\\s*", ""),  # everything after ):
+  stringsAsFactors = FALSE
+) %>%
+  mutate(category = categorise(response))
+
+data <- routes %>% 
+  select(all_of(q_cols), destination) %>%
+  rename_with(~ str_replace(.x, "^.*?\\):\\s*", "")) %>% 
+  pivot_longer(cols = -destination, names_to = "reason", values_to = "value") %>%
+  filter(value == TRUE) %>%
+  mutate(
+    destination = clean_destination(destination),
+    category = categorise(reason),
+    category = factor(category, levels = c("Safe", "Green", "Flat", "Traffic",
+                                            "Intersections", "Peers", "Other"))
+  )
+
+caption_text <- responses %>%
+  filter(response != "Other") %>%
+  arrange(factor(category,
+                 levels = c("Safe", "Green", "Flat", "Traffic", "Intersections",
+                            "Speed limits", "Connectivity", "Short", 
+                            "Other cyclists", "Designated", "Other"))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+others_text <- routes %>%
+  select(all_of(c(other_col, other_col2))) %>%
+  pivot_longer(everything(), values_to = "other") %>%
+  select(other) %>%
+  filter(!is.na(other)) %>%
+  group_by(other) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  mutate(text = ifelse(n > 1,
+                       paste0(other, " (", n, ")"),
+                       other)) %>%
+  distinct(text) %>%
+  arrange(text) %>%
+  pull(text) %>%
+  paste(collapse = "<br>")
+
+```
+
+**2.1.`r q`**
+
+```{r fig.height = 12}
+plot <- ggplot(data %>%
+                 mutate(category = fct_rev(category),
+                        destination = fct_rev(destination)),
+               aes(x = category, fill = destination)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  labs(
+    x = "Reason for choosing route",
+    y = "Number of participants",
+    fill = "Trip purpose",
+    caption = caption_text
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+
+plot
+ggsave(paste0(plot_folder, "/2.2 route choice.png"), plot,
+       width = 18, height = 18, units = "cm")
+
+
+# # facet option (if prefered - would need 'fig.height = 12' added to {r} above)
+# # could roll this out to all relevant parts of section 2
+# plot <- ggplot(data %>% mutate(category = fct_rev(category),
+#                                destination = fct_rev(destination)),
+#                aes(x = category)) +
+#   geom_bar(aes(fill = destination)) +   # still map fill to destination
+#   facet_wrap(~ fct_rev(destination), ncol = 1, scales = "free_y") +
+#   scale_fill_brewer(palette = "Set1", direction = -1) +  # 6 colors
+#   coord_flip() +
+#   labs(
+#     x = "Reason for choosing route",
+#     y = "Number of participants",
+#     fill = "Trip purpose",
+#     caption = caption_text
+#   ) +
+#   theme_bw() +
+#   theme(plot.caption = element_text(hjust = 0),
+#         legend.position = "none")
+# 
+# plot
+# ggsave(paste0(plot_folder, "/2.1.2 route choice.png"), plot,
+#        width = 18, height = 36, units = "cm")
+```
+
+Reasons given for 'Other':<br>
+`r others_text`.
+
+### Maximum distance
+
+```{r}
+q <- routes %>% select(starts_with("3.")) %>% names()
+
+data <- routes %>%
+  select(all_of(q), destination) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(distance = str_replace(.data[[q]], "(km)", "\\1\n"),  # insert line break after 'km'
+         distance = factor(distance,
+                         levels = c("Up to 5 km\n (approximately 15 minutes)",
+                                    "Up to 10 km\n (approximately 30 minutes)",
+                                    "Up to 20 km\n (approximately 1 hour)",
+                                    "Up to 30 km\n (approximately 1.5 hour)",
+                                    "More than 30 km\n (more than 1.5 hour)")),
+         
+         destination = clean_destination(destination))
+
+```
+
+**2.1.`r q`**
+
+```{r}
+plot <- ggplot(data %>%
+                 mutate(distance = fct_rev(distance),
+                        destination = fct_rev(destination)), 
+               aes(x = distance, fill = destination)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  labs(
+    x = "Distance willing to travel",
+    y = "Number of participants",
+    fill = "Trip purpose"
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0), 
+        legend.position = "bottom") +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+
+plot
+ggsave(paste0(plot_folder, "/2.1.3 distance.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+### Unfavourable route aspects
+
+```{r}
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "unsafe")        ~ "Unsafe",
+    str_detect(x, "separation")    ~ "Not separated",
+    str_detect(x, "greenery")      ~ "Not green",
+    str_detect(x, "traffic")       ~ "Traffic",
+    str_detect(x, "intersections") ~ "Intersections",
+    str_detect(x, "speed")         ~ "Speeds",
+    str_detect(x, "connectivity")  ~ "Poor connectivity",
+    str_detect(x, "surface")       ~ "Surface",
+    str_detect(x, "steep")         ~ "Steep",
+    str_detect(x, "Other")         ~ "Other",
+    TRUE                           ~ NA_character_
+  )
+}
+
+col_names <- names(routes)
+q_cols <- col_names[startsWith(col_names, "4.")]
+last_idx <- which(col_names == tail(q_cols, 1))
+other_col <- col_names[last_idx + 1]  # 'Please specify' column
+other_col2 <- str_replace(other_col, "\\d+$", 
+                          function(n) as.character(as.integer(n) + 1)) # 'Please specify' +1
+
+q <- stringr::str_extract(q_cols[1], "^[^:]+")  # part of col name before colon
+
+responses <- data.frame(
+  response = str_replace(q_cols, "^.*?:\\s*", ""),  # everything after colon
+  stringsAsFactors = FALSE
+) %>%
+  mutate(category = categorise(response))
+
+data <- routes %>% 
+  select(all_of(q_cols), destination) %>%
+  rename_with(~ str_replace(.x, "^.*?:\\s*", "")) %>% 
+  pivot_longer(cols = -destination, names_to = "reason", values_to = "value") %>%
+  filter(value == TRUE) %>%
+  mutate(
+    destination = clean_destination(destination),
+    category = categorise(reason),
+    category = factor(category, levels = c("Unsafe", "Not separated", "Not green",
+                                           "Traffic", "Intersections", "Speeds",
+                                           "Poor connectivity", "Surface", "Steep",
+                                           "Other"))
+  )
+
+caption_text <- responses %>%
+  filter(response != "Other") %>%
+  arrange(factor(category,
+                 levels = c("Unsafe", "Not separated", "Not green",
+                            "Traffic", "Intersections", "Speeds",
+                            "Poor connectivity", "Surface", "Steep",
+                            "Other"))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+others_text <- routes %>%
+  select(all_of(c(other_col, other_col2))) %>%
+  pivot_longer(everything(), values_to = "other") %>%
+  select(other) %>%
+  filter(!is.na(other)) %>%
+  group_by(other) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  mutate(text = ifelse(n > 1,
+                       paste0(other, " (", n, ")"),
+                       other)) %>%
+  distinct(text) %>%
+  arrange(text) %>%
+  pull(text) %>%
+  paste(collapse = "<br>")
+
+```
+
+**2.1.`r q`**
+
+```{r}
+plot <- ggplot(data %>%
+                 mutate(category = fct_rev(category),
+                        destination = fct_rev(destination)), 
+               aes(x = category, fill = destination)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  labs(
+    x = "Unfavourable route aspects",
+    y = "Number of participants",
+    fill = "Trip purpose",
+    caption = caption_text
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0), 
+        legend.position = "bottom") +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+
+plot
+ggsave(paste0(plot_folder, "/2.1.4 unfavourable.png"), plot,
+       width = 18, height = 18, units = "cm")
+
+```
+
+Other unfavourable route aspects given:<br>
+`r others_text`
+
+### Frequency of cycling route
+
+```{r}
+q <- routes %>% select(starts_with("5.")) %>% names()
+
+data <- routes %>%
+  select(all_of(q), destination) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(frequency = str_replace(.data[[q]], "-", "-\n"),  # insert line break after first dash
+         frequency = factor(frequency,
+                         levels = c("Frequently-\n 5 days or more per week",
+                                    "Regularly-\n at least 4 days per week",
+                                    "Often-\n 1-3 days per week",
+                                    "From time to time-\n 1-4 days per month")),
+         
+         destination = clean_destination(destination))
+
+```
+
+**2.1.`r q`**
+
+```{r}
+plot <- ggplot(data %>%
+                 mutate(frequency = fct_rev(frequency),
+                        destination = fct_rev(destination)), 
+               aes(x = frequency, fill = destination)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  labs(
+    x = "Frequency of cycling route",
+    y = "Number of participants",
+    fill = "Trip purpose"
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0), 
+        legend.position = "bottom") +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+
+plot
+ggsave(paste0(plot_folder, "/2.1.5 frequency.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+### Satisfaction level
+
+```{r}
+q <- routes %>% select(starts_with("6.")) %>% names()
+
+data <- routes %>%
+  select(all_of(q), destination) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(satisf = str_replace(.data[[q]], "-", "-\n"),  # insert line break after first dash
+         satisf = factor(satisf,
+                         levels = c("Very satisfied",
+                                    "Satisfied",
+                                    "Neutral",
+                                    "Dissatisfied",
+                                    "Very dissatisfied")),
+         destination = clean_destination(destination))
+
+```
+
+**2.1.`r q`**
+
+```{r}
+plot <- ggplot(data %>%
+                 mutate(satisf = fct_rev(satisf),
+                        destination = fct_rev(destination)), 
+               aes(x = satisf, fill = destination)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  labs(
+    x = "Satisfaction with route",
+    y = "Number of participants",
+    fill = "Trip purpose"
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0), 
+        legend.position = "bottom") +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+
+plot
+ggsave(paste0(plot_folder, "/2.1.6 satisfaction.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+
+### Accompanying people
+
+```{r}
+col_names <- names(routes)
+q_cols <- col_names[startsWith(col_names, "7.")]
+last_idx <- which(col_names == tail(q_cols, 1))
+other_col <- col_names[last_idx + 1]
+
+q <- stringr::str_extract(q_cols[1], "^[^:]+")  # part of col name before colon
+
+data <- routes %>% 
+  select(all_of(q_cols), destination) %>%
+  rename_with(~ str_replace(.x, "^.*?:\\s*", "")) %>% 
+  pivot_longer(cols = -destination, names_to = "people", values_to = "value") %>%
+  filter(value == TRUE) %>%
+  mutate(
+    destination = clean_destination(destination),
+    people = factor(people, levels = c("My friend(s)", "My partner", "My kids",
+                                            "Other family members", "I cycle alone"))
+  )
+
+
+```
+
+**2.`r q`**
+
+```{r}
+plot <- ggplot(data %>%
+                 mutate(people = fct_rev(people),
+                        destination = fct_rev(destination)), 
+               aes(x = people, fill = destination)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  labs(
+    x = "Accompanying people",
+    y = "Number of participants",
+    fill = "Trip purpose"
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0), 
+        legend.position = "bottom") +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+
+plot
+ggsave(paste0(plot_folder, "/2.1.7 accompanying.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+
+```
+
+```{r}
+spot_numbers <- spots %>%
+  mutate(category = case_when(
+    str_detect(type, "My favorite")    ~ "Favourite",
+    str_detect(type, "least favorite") ~ "Least favourite",
+    str_detect(type, "stressful")       ~ "Stressful",
+    TRUE                                ~ NA_character_
+  )) %>%
+  group_by(category) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
+fav_no <- spot_numbers[spot_numbers$category == "Favourite", "n"]
+
+fav_no <- spot_numbers %>% filter(category == "Favourite") %>% pull(n)
+```
+
+
+### Favourite spot
+
+**2.2 My favorite spot(s) along the route**
+
+A total of `r spot_numbers %>% filter(category == "Favourite") %>% pull(n)` favourite spots were marked by participants.
+
+### Stressful intersections
+
+**2.3 Most stressful instersection(s)**
+
+A total of `r spot_numbers %>% filter(category == "Stressful") %>% pull(n)` stressful intersections were marked by participants.
+
+### Least favourite spot
+
+**2.4 My least favorite spot(s) along the route**
+
+A total of `r spot_numbers %>% filter(category == "Least favourite") %>% pull(n)` least favourite spots were marked by participants.
+
+### Barriers and challenges
+
+```{r}
+### UP TO HERE
+
+# To do section 2.5 from 'routes'.  It's a multi-choice one with multiple options; can base it on 
+# 2.1.2 (reason for selecting routes).  Will need a caption, and 'other' text
+
+```
 
