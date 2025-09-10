@@ -45,11 +45,13 @@ spots <-  lapply(spot_sheet_names, function(sheet) {
 }) %>%
   bind_rows()
 
-
 ```
 
 # Introduction
-There were `r nrow(respondents)` survey responses, though some were incomplete.  
+
+*[Include some details about how the survey was conducted, eg who it was conducted for (presumably City of Greater Bendigo), who conducted it, the dates it was conducted, and how participants were invited to participate.]*
+
+There were `r nrow(respondents)` survey responses, though some participants did not answer all questions.  
 
 The survey is divided into 3 parts:
 - sociodemographic characteristics
@@ -59,9 +61,10 @@ The survey is divided into 3 parts:
 # 1. Sociodemographic characteristics
 This section provides general information about the survey participants.
 
-## Ridership
+### Ridership
 
 ```{r}
+
 categorise <- function(x) {
   case_when(
     str_detect(x, "once a week")  ~ "Weekly",
@@ -77,8 +80,8 @@ q <- respondents %>% select(starts_with("Are you a bicycle rider")) %>% names()
 
 data <- respondents %>%
   select(all_of(q)) %>%
-  mutate(category = categorise(.data[[q]])) %>%
-  mutate(category = factor(category,
+  mutate(category = categorise(.data[[q]]),
+         category = factor(category,
                            levels = c("Weekly", "Monthly", "Occasionally",
                                       "Not cycled", "Did not answer")))
 responses <- respondents %>%
@@ -100,7 +103,7 @@ valid_responses <- respondents %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 
 plot <- ggplot(data, aes(x = category)) +
   geom_bar(fill = "steelblue") +
@@ -139,7 +142,7 @@ data <- valid_responses %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 
 plot <- ggplot(data, aes(x = gender)) +
   geom_bar(fill = "steelblue") +
@@ -155,6 +158,8 @@ ggsave(paste0(plot_folder, "/1.1 gender.png"), plot,
        width = 18, height = 9, units = "cm")
 
 ```
+
+There were slightly more participants describing themselves as male (`r round(nrow(data %>% filter(gender == "Man/Male")) / nrow(data) * 100)`%) than as women or female (`r round(nrow(data %>% filter(gender == "Woman/Female")) / nrow(data) * 100)`%).
 
 ### Age
 
@@ -187,7 +192,7 @@ data <- valid_responses %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 plot <- ggplot(data, aes(x = age_group)) +
   geom_bar(fill = "steelblue") +
   labs(
@@ -201,6 +206,8 @@ ggsave(paste0(plot_folder, "/1.2 age.png"), plot,
        width = 18, height = 9, units = "cm")
 
 ```
+
+Most participants (`r round(nrow(data %>% filter(age_num > 30)) / nrow(data) * 100)`%) were aged over 30, including a large group aged over 60 (`r round(nrow(data %>% filter(age_num > 60)) / nrow(data) * 100)`%). 
 
 ### Living arrangements
 
@@ -220,7 +227,7 @@ data <- valid_responses %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 plot <- ggplot(data, aes(x = living_arrangement)) +
   geom_bar(fill = "steelblue") +
   labs(
@@ -235,6 +242,8 @@ ggsave(paste0(plot_folder, "/1.3 living.png"), plot,
        width = 18, height = 9, units = "cm")
 
 ```
+
+Most participants (`r round(nrow(data %>% filter(living_arrangement %in% c("Couple with children", "Couple, no children"))) / nrow(data) * 100)`%) were in couples, and almost half (`r round(nrow(data %>% filter(living_arrangement %in% c("Couple with children", "Lone parent with child/children"))) / nrow(data) * 100)`%) were in families with children.
 
 ### Cars
 
@@ -251,7 +260,7 @@ data <- valid_responses %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 plot <- ggplot(data, aes(x = num_cars)) +
   geom_bar(fill = "steelblue") +
   labs(
@@ -265,6 +274,9 @@ ggsave(paste0(plot_folder, "/1.4 cars.png"), plot,
        width = 18, height = 9, units = "cm")
 
 ```
+
+Around `r round(nrow(data %>% filter(num_cars == 2)) / nrow(data) * 100)`% of households had 2 cars, with only around `r round(nrow(data %>% mutate(num_cars = as.numeric(as.character(num_cars))) %>% filter(num_cars > 2)) / nrow(data) * 100)`% having more than 2 cars.
+
 
 ### Bicycles
 
@@ -281,7 +293,7 @@ data <- valid_responses %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 plot <- ggplot(data, aes(x = num_bikes)) +
   geom_bar(fill = "steelblue") +
   labs(
@@ -295,6 +307,9 @@ ggsave(paste0(plot_folder, "/1.5 bikes.png"), plot,
        width = 18, height = 9, units = "cm")
 
 ```
+
+Around `r round(nrow(data %>% filter(num_bikes == 2)) / nrow(data) * 100)`% of households had 2 bicycles, with around `r round(nrow(data %>% mutate(num_bikes = as.numeric(as.character(num_bikes))) %>% filter(num_bikes > 2)) / nrow(data) * 100)`% having more than 2 bicycles.
+
 
 ### Educational qualifications
 
@@ -341,7 +356,7 @@ caption_text <- responses %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 plot <- ggplot(data, aes(x = qualif)) +
   geom_bar(fill = "steelblue") +
   labs(
@@ -357,6 +372,9 @@ ggsave(paste0(plot_folder, "/1.6 qualification.png"), plot,
        width = 18, height = 9, units = "cm")
 
 ```
+
+Most participants (`r round(nrow(data %>% filter(qualif %in% c("Diploma/certificate", "Undergraduate", "Postgraduate"))) / nrow(data) * 100)`%) reported a tertiary qualification of some kind.
+
 
 ### Occupation
 
@@ -410,7 +428,7 @@ others_text <- data %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 plot <- ggplot(data_plot, aes(x = occup)) +
   geom_bar(fill = "steelblue") +
   labs(
@@ -428,6 +446,8 @@ ggsave(paste0(plot_folder, "/1.7 occupation.png"), plot,
 
 Other occupations not included in the plot above: 
 `r others_text`.
+
+A wide variety of occupations were reported, with 'Retired' (`r round(nrow(data %>% filter(occup == "Retired")) / nrow(data) * 100)`%) the largest single reported occupation, consistently with the large number of participants aged over 60.
 
 ### Income
 
@@ -457,7 +477,7 @@ data <- valid_responses %>%
 
 **`r q`**
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 
 plot <- ggplot(data, aes(x = income_label)) +
   geom_bar(fill = "steelblue") +
@@ -474,14 +494,17 @@ ggsave(paste0(plot_folder, "/1.8 income.png"), plot,
 
 ```
 
+The most common income category was \$45,001 to \$135,000 (`r round(nrow(data %>% filter(income_label == "$45,001 - $135,000")) / nrow(data) * 100)`% of participants).
+
+
 # 2. Cycling experiences
 
-This section provides information about routes drawn by participants.
+This section provides information about routes drawn by participants.  A total of `r nrow(routes)` route responses were received from by participants, though 13 were of either zero length or under 50m, leaving a total of `r nrow(routes) - 13` valid routes. 
 
 ### Route purpose
 Participants were asked to describe the purpose of their route.
 
-```{r}
+```{r fig.width = 8, fig.height = 4}
 clean_destination <- function(x) {
   x <- case_when(
     x == "To public transport stop-statio" ~ "To public transport stop/station",
@@ -536,8 +559,10 @@ ggsave(paste0(plot_folder, "/2.0 purpose.png"), plot,
 
 ```
 
-Other destinations given:<br>
+Destinations stated by participants under 'Other':<br>
 `r others_text`
+
+The largest category of trip purpose was 'other' (`r round(nrow(data %>% filter(destination == "To other destinations")) / nrow(data) * 100)`%), followed by 'work/commute' (`r round(nrow(data %>% filter(destination == "To work/commute")) / nrow(data) * 100)`%). While a wide variety of 'other' destinations were stated, many of them relate to recreational trips.
 
 
 ### Reasons for cycling
@@ -609,26 +634,22 @@ others_text <- routes %>%
 
 ```
 
-**2.`r q`**
+**2.1.`r q`**
 
-```{r}
-plot <- ggplot(data %>%
-                 mutate(category = fct_rev(category),
-                        destination = fct_rev(destination)), 
+```{r fig.width = 8, fig.height = 5}
+plot <- ggplot(data, 
                aes(x = category, fill = destination)) +
-  geom_bar(position = "dodge") +
-  scale_fill_brewer(palette = "Set1", direction = -1) +
+  geom_bar(position = "stack") +
+  scale_fill_brewer(palette = "Set1") +
   labs(
     x = "Reason for cycling",
     y = "Number of participants",
     fill = "Trip purpose",
     caption = caption_text
   ) +
-  coord_flip() +
   theme_bw() +
-  theme(plot.caption = element_text(hjust = 0), 
-        legend.position = "bottom") +
-  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+  theme(plot.caption = element_text(hjust = 0))
+
 
 plot
 ggsave(paste0(plot_folder, "/2.1.1 reason.png"), plot,
@@ -637,8 +658,10 @@ ggsave(paste0(plot_folder, "/2.1.1 reason.png"), plot,
 
 ```
 
-Reasons given for 'Other':<br>
+Reasons stated by participants under 'Other':<br>
 `r others_text`
+
+Exercise (`r round(nrow(data %>% filter(category == "Exercise")) / nrow(data) * 100)`%) and enjoyment (`r round(nrow(data %>% filter(category == "Enjoyment")) / nrow(data) * 100)`%) were the most commonly-stated reasons, followed by convenience (`r round(nrow(data %>% filter(category == "Convenience")) / nrow(data) * 100)`%). Few participants (`r round(nrow(data %>% filter(category == "Availability")) / nrow(data) * 100)`%) were driven by the necessity of bicycle being the only available method.
 
 ### Reasons for selecting route
 
@@ -650,10 +673,10 @@ categorise <- function(x) {
     str_detect(x, "flat")          ~ "Flat",
     str_detect(x, "traffic")       ~ "Traffic",
     str_detect(x, "intersections") ~ "Intersections",
-    str_detect(x, "speed")         ~ "Speed limits",
+    str_detect(x, "speed")         ~ "Speed",
     str_detect(x, "connectivity")  ~ "Connectivity",
     str_detect(x, "shortest")      ~ "Short",
-    str_detect(x, "cyclists")      ~ "Other cyclists",
+    str_detect(x, "cyclists")      ~ "Cyclists",
     str_detect(x, "designated")    ~ "Designated",
     str_detect(x, "Other")         ~ "Other",
     TRUE                           ~ NA_character_
@@ -683,16 +706,17 @@ data <- routes %>%
   mutate(
     destination = clean_destination(destination),
     category = categorise(reason),
-    category = factor(category, levels = c("Safe", "Green", "Flat", "Traffic",
-                                            "Intersections", "Peers", "Other"))
+    category = factor(category, levels = c("Safe", "Green", "Flat", "Traffic", 
+                            "Intersections", "Speed", "Connectivity",  
+                            "Short","Cyclists", "Designated", "Other"))
   )
 
 caption_text <- responses %>%
   filter(response != "Other") %>%
   arrange(factor(category,
-                 levels = c("Safe", "Green", "Flat", "Traffic", "Intersections",
-                            "Speed limits", "Connectivity", "Short", 
-                            "Other cyclists", "Designated", "Other"))) %>%
+                 levels = c("Safe", "Green", "Flat", "Traffic", 
+                            "Intersections", "Speed", "Connectivity",  
+                            "Short","Cyclists", "Designated", "Other"))) %>%
   mutate(full = paste0(category, ": ", response)) %>%
   pull(full) %>%
   paste(collapse = "\n")
@@ -717,56 +741,32 @@ others_text <- routes %>%
 
 **2.1.`r q`**
 
-```{r fig.height = 12}
-plot <- ggplot(data %>%
-                 mutate(category = fct_rev(category),
-                        destination = fct_rev(destination)),
+```{r  fig.width = 8, fig.height = 6}
+plot <- ggplot(data,
                aes(x = category, fill = destination)) +
-  geom_bar(position = "dodge") +
-  scale_fill_brewer(palette = "Set1", direction = -1) +
+  geom_bar(position = "stack") +
+  scale_fill_brewer(palette = "Set1") +
   labs(
     x = "Reason for choosing route",
     y = "Number of participants",
     fill = "Trip purpose",
     caption = caption_text
   ) +
-  coord_flip() +
   theme_bw() +
-  theme(plot.caption = element_text(hjust = 0),
-        legend.position = "bottom") +
-  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+  theme(plot.caption = element_text(hjust = 0), 
+        legend.position = "bottom") 
+
 
 plot
-ggsave(paste0(plot_folder, "/2.2 route choice.png"), plot,
-       width = 18, height = 18, units = "cm")
+ggsave(paste0(plot_folder, "/2.1.2 route choice.png"), plot,
+       width = 18, height = 15, units = "cm")
 
-
-# # facet option (if prefered - would need 'fig.height = 12' added to {r} above)
-# # could roll this out to all relevant parts of section 2
-# plot <- ggplot(data %>% mutate(category = fct_rev(category),
-#                                destination = fct_rev(destination)),
-#                aes(x = category)) +
-#   geom_bar(aes(fill = destination)) +   # still map fill to destination
-#   facet_wrap(~ fct_rev(destination), ncol = 1, scales = "free_y") +
-#   scale_fill_brewer(palette = "Set1", direction = -1) +  # 6 colors
-#   coord_flip() +
-#   labs(
-#     x = "Reason for choosing route",
-#     y = "Number of participants",
-#     fill = "Trip purpose",
-#     caption = caption_text
-#   ) +
-#   theme_bw() +
-#   theme(plot.caption = element_text(hjust = 0),
-#         legend.position = "none")
-# 
-# plot
-# ggsave(paste0(plot_folder, "/2.1.2 route choice.png"), plot,
-#        width = 18, height = 36, units = "cm")
 ```
 
-Reasons given for 'Other':<br>
+Reasons stated by participants under 'Other':<br>
 `r others_text`.
+
+Safety (`r round(nrow(data %>% filter(category == "Safe")) / nrow(data) * 100)`%), low traffic (`r round(nrow(data %>% filter(category == "Traffic")) / nrow(data) * 100)`%), shortness of route (`r round(nrow(data %>% filter(category == "Short")) / nrow(data) * 100)`%) and availability of designated bike paths (`r round(nrow(data %>% filter(category == "Designated")) / nrow(data) * 100)`%) were the highest-ranked reasons for selecting routes.
 
 ### Maximum distance
 
@@ -777,12 +777,14 @@ data <- routes %>%
   select(all_of(q), destination) %>%
   filter(!is.na(.data[[q]])) %>%
   mutate(distance = str_replace(.data[[q]], "(km)", "\\1\n"),  # insert line break after 'km'
+         distance = str_replace(distance, "approximately ", "~"),
+         distance = str_replace(distance, "more than ", ">"),
          distance = factor(distance,
-                         levels = c("Up to 5 km\n (approximately 15 minutes)",
-                                    "Up to 10 km\n (approximately 30 minutes)",
-                                    "Up to 20 km\n (approximately 1 hour)",
-                                    "Up to 30 km\n (approximately 1.5 hour)",
-                                    "More than 30 km\n (more than 1.5 hour)")),
+                         levels = c("Up to 5 km\n (~15 minutes)",
+                                    "Up to 10 km\n (~30 minutes)",
+                                    "Up to 20 km\n (~1 hour)",
+                                    "Up to 30 km\n (~1.5 hour)",
+                                    "More than 30 km\n (>1.5 hour)")),
          
          destination = clean_destination(destination))
 
@@ -790,44 +792,41 @@ data <- routes %>%
 
 **2.1.`r q`**
 
-```{r}
-plot <- ggplot(data %>%
-                 mutate(distance = fct_rev(distance),
-                        destination = fct_rev(destination)), 
+```{r fig.width = 8, fig.height = 4}
+plot <- ggplot(data, 
                aes(x = distance, fill = destination)) +
-  geom_bar(position = "dodge") +
-  scale_fill_brewer(palette = "Set1", direction = -1) +
+  geom_bar(position = "stack") +
+  scale_fill_brewer(palette = "Set1") +
   labs(
     x = "Distance willing to travel",
     y = "Number of participants",
     fill = "Trip purpose"
   ) +
-  coord_flip() +
   theme_bw() +
-  theme(plot.caption = element_text(hjust = 0), 
-        legend.position = "bottom") +
-  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+  theme(plot.caption = element_text(hjust = 0))
 
 plot
 ggsave(paste0(plot_folder, "/2.1.3 distance.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 ```
+
+'Up to 10 km (~30 minutes)' was the most common distance (`r round(nrow(data %>% filter(distance == "Up to 10 km\n (~30 minutes)")) / nrow(data) * 100)`%) participants would be willing to travel for their stated purpose. Participants were not  willing to travel for more than 30 km (> 1.5 hour) for work/commuting or education purposes, with most trips where that distance was acceptable being 'other' (typically recreational) trips.
 
 ### Unfavourable route aspects
 
 ```{r}
 categorise <- function(x) {
   case_when(
-    str_detect(x, "unsafe")        ~ "Unsafe",
-    str_detect(x, "separation")    ~ "Not separated",
-    str_detect(x, "greenery")      ~ "Not green",
+    str_detect(x, "unsafe")        ~ "Safety",
+    str_detect(x, "separation")    ~ "Separation",
+    str_detect(x, "greenery")      ~ "Greenery",
     str_detect(x, "traffic")       ~ "Traffic",
     str_detect(x, "intersections") ~ "Intersections",
-    str_detect(x, "speed")         ~ "Speeds",
-    str_detect(x, "connectivity")  ~ "Poor connectivity",
+    str_detect(x, "speed")         ~ "Speed",
+    str_detect(x, "connectivity")  ~ "Connectivity",
     str_detect(x, "surface")       ~ "Surface",
-    str_detect(x, "steep")         ~ "Steep",
+    str_detect(x, "steep")         ~ "Steepness",
     str_detect(x, "Other")         ~ "Other",
     TRUE                           ~ NA_character_
   )
@@ -856,18 +855,18 @@ data <- routes %>%
   mutate(
     destination = clean_destination(destination),
     category = categorise(reason),
-    category = factor(category, levels = c("Unsafe", "Not separated", "Not green",
-                                           "Traffic", "Intersections", "Speeds",
-                                           "Poor connectivity", "Surface", "Steep",
+    category = factor(category, levels = c("Safety", "Separation", "Greenery",
+                                           "Traffic", "Intersections", "Speed",
+                                           "Connectivity", "Surface", "Steepness",
                                            "Other"))
   )
 
 caption_text <- responses %>%
   filter(response != "Other") %>%
   arrange(factor(category,
-                 levels = c("Unsafe", "Not separated", "Not green",
-                            "Traffic", "Intersections", "Speeds",
-                            "Poor connectivity", "Surface", "Steep",
+                 levels = c("Safety", "Separation", "Greenery",
+                            "Traffic", "Intersections", "Speed",
+                            "Connectivity", "Surface", "Steepness",
                             "Other"))) %>%
   mutate(full = paste0(category, ": ", response)) %>%
   pull(full) %>%
@@ -893,33 +892,31 @@ others_text <- routes %>%
 
 **2.1.`r q`**
 
-```{r}
-plot <- ggplot(data %>%
-                 mutate(category = fct_rev(category),
-                        destination = fct_rev(destination)), 
+```{r fig.width = 8, fig.height = 5}
+plot <- ggplot(data, 
                aes(x = category, fill = destination)) +
-  geom_bar(position = "dodge") +
-  scale_fill_brewer(palette = "Set1", direction = -1) +
+  geom_bar(position = "stack") +
+  scale_fill_brewer(palette = "Set1") +
   labs(
     x = "Unfavourable route aspects",
     y = "Number of participants",
     fill = "Trip purpose",
     caption = caption_text
   ) +
-  coord_flip() +
   theme_bw() +
   theme(plot.caption = element_text(hjust = 0), 
-        legend.position = "bottom") +
-  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+        legend.position = "bottom")
 
 plot
 ggsave(paste0(plot_folder, "/2.1.4 unfavourable.png"), plot,
-       width = 18, height = 18, units = "cm")
+       width = 18, height = 15, units = "cm")
 
 ```
 
-Other unfavourable route aspects given:<br>
+Unfavourable route aspects stated by participants under 'Other':<br>
 `r others_text`
+
+Lack of separation from traffic (`r round(nrow(data %>% filter(category == "Separation")) / nrow(data) * 100)`%), poor connectivity (`r round(nrow(data %>% filter(category == "Connectivity")) / nrow(data) * 100)`%), heavy traffic (`r round(nrow(data %>% filter(category == "Traffic")) / nrow(data) * 100)`%), and poor safety (`r round(nrow(data %>% filter(category == "Safety")) / nrow(data) * 100)`%) were the most frequently-identified unsatisfactory route aspects. 
 
 ### Frequency of cycling route
 
@@ -942,29 +939,27 @@ data <- routes %>%
 
 **2.1.`r q`**
 
-```{r}
-plot <- ggplot(data %>%
-                 mutate(frequency = fct_rev(frequency),
-                        destination = fct_rev(destination)), 
+```{r fig.width = 8, fig.height = 5}
+plot <- ggplot(data, 
                aes(x = frequency, fill = destination)) +
-  geom_bar(position = "dodge") +
-  scale_fill_brewer(palette = "Set1", direction = -1) +
+  geom_bar(position = "stack") +
+  scale_fill_brewer(palette = "Set1") +
   labs(
     x = "Frequency of cycling route",
     y = "Number of participants",
     fill = "Trip purpose"
   ) +
-  coord_flip() +
   theme_bw() +
-  theme(plot.caption = element_text(hjust = 0), 
-        legend.position = "bottom") +
-  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+  theme(plot.caption = element_text(hjust = 0),
+        legend.position = "bottom")
 
 plot
 ggsave(paste0(plot_folder, "/2.1.5 frequency.png"), plot,
        width = 18, height = 12, units = "cm")
 
 ```
+
+The most common answers were 1-4 days per month (`r round(nrow(data %>% filter(frequency == "From time to time-\n 1-4 days per month")) / nrow(data) * 100)`%), followed by 1-3 days per week (`r round(nrow(data %>% filter(frequency == "Often-\n 1-3 days per week")) / nrow(data) * 100)`%).
 
 ### Satisfaction level
 
@@ -987,30 +982,26 @@ data <- routes %>%
 
 **2.1.`r q`**
 
-```{r}
-plot <- ggplot(data %>%
-                 mutate(satisf = fct_rev(satisf),
-                        destination = fct_rev(destination)), 
+```{r fig.width = 8, fig.height = 4}
+plot <- ggplot(data, 
                aes(x = satisf, fill = destination)) +
-  geom_bar(position = "dodge") +
-  scale_fill_brewer(palette = "Set1", direction = -1) +
+  geom_bar(position = "stack") +
+  scale_fill_brewer(palette = "Set1") +
   labs(
     x = "Satisfaction with route",
     y = "Number of participants",
     fill = "Trip purpose"
   ) +
-  coord_flip() +
   theme_bw() +
-  theme(plot.caption = element_text(hjust = 0), 
-        legend.position = "bottom") +
-  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+  theme(plot.caption = element_text(hjust = 0))
 
 plot
 ggsave(paste0(plot_folder, "/2.1.6 satisfaction.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 ```
 
+Around `r round(nrow(data %>% filter(satisf %in% c("Satisfied", "Very satisfied"))) / nrow(data) * 100)`% of participants described themselves as 'Satisfied' or 'Very satisfied'.
 
 ### Accompanying people
 
@@ -1029,39 +1020,38 @@ data <- routes %>%
   filter(value == TRUE) %>%
   mutate(
     destination = clean_destination(destination),
-    people = factor(people, levels = c("My friend(s)", "My partner", "My kids",
-                                            "Other family members", "I cycle alone"))
+    people = ifelse(people == "Other family members",
+                    "Other family\n members", people),
+    people = factor(people, levels = c("I cycle alone", "My friend(s)", "My partner",
+                                        "My kids", "Other family\n members"))
   )
 
 
 ```
 
-**2.`r q`**
+**2.1.`r q`**
 
-```{r}
-plot <- ggplot(data %>%
-                 mutate(people = fct_rev(people),
-                        destination = fct_rev(destination)), 
+```{r fig.width = 8, fig.height = 4}
+plot <- ggplot(data, 
                aes(x = people, fill = destination)) +
-  geom_bar(position = "dodge") +
-  scale_fill_brewer(palette = "Set1", direction = -1) +
+  geom_bar(position = "stack") +
+  scale_fill_brewer(palette = "Set1") +
   labs(
     x = "Accompanying people",
     y = "Number of participants",
     fill = "Trip purpose"
   ) +
-  coord_flip() +
   theme_bw() +
-  theme(plot.caption = element_text(hjust = 0), 
-        legend.position = "bottom") +
-  guides(fill = guide_legend(reverse = TRUE, nrow = 3))
+  theme(plot.caption = element_text(hjust = 0))
 
 plot
 ggsave(paste0(plot_folder, "/2.1.7 accompanying.png"), plot,
-       width = 18, height = 12, units = "cm")
+       width = 18, height = 9, units = "cm")
 
 
 ```
+
+The most common answer was 'I cycle alone' (`r round(nrow(data %>% filter(people == "I cycle alone")) / nrow(data) * 100)`%), and this answer was given for `r round(nrow(data %>% filter(people == "I cycle alone" & destination == "To work/commute")) / nrow(data %>% filter(destination == "To work/commute")) * 100)`% of work/commute trips.
 
 ```{r}
 spot_numbers <- spots %>%
@@ -1102,10 +1092,693 @@ A total of `r spot_numbers %>% filter(category == "Least favourite") %>% pull(n)
 ### Barriers and challenges
 
 ```{r}
-### UP TO HERE
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "safe cycling")        ~ "Unsafe infrastructure",
+    str_detect(x, "Heavy traffic")       ~ "Heavy traffic",
+    str_detect(x, "Fast traffic")        ~ "Fast traffic",
+    str_detect(x, "bike parking")        ~ "Lack of bike parking",
+    str_detect(x, "personal safety")     ~ "Personal safety",
+    str_detect(x, "lighting")            ~ "Lighting",
+    str_detect(x, "Poor road")           ~ "Road conditions",
+    str_detect(x, "separated cycling")   ~ "Lack of separation",
+    str_detect(x, "Hilly terrain")       ~ "Hilliness",
+    str_detect(x, "changing facilities") ~ "End-of-trip facilities",
+    str_detect(x, "Weather")             ~ "Weather",
+    str_detect(x, "maintenance")         ~ "Lack of equipment",
+    str_detect(x, "awareness")           ~ "Lack of awareness",
+    str_detect(x, "health")              ~ "Health",
+    str_detect(x, "Convenience")         ~ "Convenience",
+    str_detect(x, "signs")               ~ "Lack of signage",
+    str_detect(x, "greenery")            ~ "Lack of greenery",
+    str_detect(x, "Other")               ~ "Other",
+    TRUE                                 ~ NA_character_
+  )
+}
 
-# To do section 2.5 from 'routes'.  It's a multi-choice one with multiple options; can base it on 
-# 2.1.2 (reason for selecting routes).  Will need a caption, and 'other' text
+col_names <- names(respondents)
+q_cols <- col_names[startsWith(col_names, "2.5")]
+last_idx <- which(col_names == tail(q_cols, 1))
+other_col <- col_names[last_idx + 1]  # 'Please specify' column
+
+q <- stringr::str_extract(q_cols[1], ".*\\)")  # part of col name before )
+
+responses <- data.frame(
+  response = str_replace(q_cols, "^.*?\\):\\s*", ""),  # everything after ):
+  stringsAsFactors = FALSE
+) %>%
+  mutate(category = categorise(response))
+
+data <- valid_responses %>% 
+  select(all_of(q_cols)) %>%
+  rename_with(~ str_replace(.x, "^.*?\\):\\s*", "")) %>% 
+  pivot_longer(everything(), names_to = "reason", values_to = "value") %>%
+  filter(value == TRUE) %>%
+  mutate(
+    category = categorise(reason),
+    category = factor(category, levels = c("Unsafe infrastructure", "Heavy traffic",
+                                           "Fast traffic", "Lack of bike parking",
+                                           "Personal safety", "Lighting",
+                                           "Road conditions", "Lack of separation",
+                                           "Hilliness", "End-of-trip facilities",
+                                           "Weather", "Lack of equipment",
+                                           "Lack of awareness", "Health",
+                                           "Convenience", "Lack of signage",
+                                           "Lack of greenery", "Other")),
+    category = fct_rev(category)
+  )
+
+caption_text <- responses %>%
+  filter(response != "Other") %>%
+  arrange(factor(category,
+                 levels = c("Unsafe infrastructure", "Heavy traffic",
+                            "Fast traffic", "Lack of bike parking",
+                            "Personal safety", "Lighting",
+                            "Road conditions", "Lack of separation",
+                            "Hilliness", "End-of-trip facilities",
+                            "Weather", "Lack of equipment",
+                            "Lack of awareness", "Health",
+                            "Convenience", "Lack of signage",
+                            "Lack of greenery", "Other"))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+others_text <- respondents %>%
+  select(any_of(other_col)) %>%
+  pivot_longer(everything(), values_to = "other") %>%
+  select(other) %>%
+  filter(!is.na(other)) %>%
+  group_by(other) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  mutate(text = ifelse(n > 1,
+                       paste0(other, " (", n, ")"),
+                       other)) %>%
+  distinct(text) %>%
+  arrange(text) %>%
+  pull(text) %>%
+  paste(collapse = "<br>")
 
 ```
 
+**2.`r q`**
+
+```{r fig.width = 8, fig.height = 8}
+plot <- ggplot(data, aes(x = category)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Barrier or challenge",
+    y = "Number of participants",
+    caption = caption_text
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0),
+        plot.caption.position = "plot")
+
+plot
+ggsave(paste0(plot_folder, "/2.5 challenges.png"), plot,
+       width = 18, height = 18, units = "cm")
+
+```
+
+Barriers and challenges stated by participants under 'Other':<br> 
+`r others_text`.
+
+'Lack of separation' (`r round(nrow(data %>% filter(category == "Lack of separation")) / nrow(data) * 100)`%) and 'unsafe infrastructure' (`r round(nrow(data %>% filter(category == "Unsafe infrastructure")) / nrow(data) * 100)`%) were the most frequently-stated barriers and challenges, emphasising the high importance of safety considerations to participants.
+
+# 3. Cycling preferences
+
+This section provides information about preferences stated by participants.
+
+### Bicycle type
+
+```{r}
+q <- respondents %>% select(starts_with("3.1 ")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(bicycle = factor(.data[[q]],
+                         levels = c("Classic bicycle", "E-bike", 
+                                    "Both")))
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+
+plot <- ggplot(data, aes(x = bicycle)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Type of bicycle",
+    y       = "Number of participants"
+  ) +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/3.1 bicycle.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+'Classic bicycle' (`r round(nrow(data %>% filter(bicycle == "Classic bicycle")) / nrow(data) * 100)`%) was the most common answer.
+
+### Years riding
+
+```{r}
+q <- respondents %>% select(starts_with("3.2")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(years = factor(.data[[q]],
+                         levels = c("Less than 1 year", "1-2 years",
+                                    "3-5 years", "6-10 years",
+                                    "More than 10 years")))
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+
+plot <- ggplot(data, aes(x = years)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Years riding",
+    y       = "Number of participants"
+  ) +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/3.2 years.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+Participants were typically very experienced riders, with around `r round(nrow(data %>% filter(years == "More than 10 years")) / nrow(data) * 100)`% having ridden for more than 10 years.
+
+### Satisfaction with infrastructure
+
+```{r}
+q <- respondents %>% select(starts_with("3.3")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(satisf = factor(.data[[q]],
+                         levels = c("Very satisfied", "Satisfied",
+                                    "Neutral", "Dissatisfied",
+                                    "Very dissatisfied")))
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+
+plot <- ggplot(data, aes(x = satisf)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Satisfaction with infrastructure",
+    y       = "Number of participants"
+  ) +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/3.3 satisfaction.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+Responses to this question were split, with around `r round(nrow(data %>% filter(satisf %in% c("Satisfied", "Very satisfied"))) / nrow(data) * 100)`% expressing themselves as 'Satisfied' or 'Very satisfied', while around `r round(nrow(data %>% filter(satisf %in% c("Dissatisfied", "Very dissatisfied"))) / nrow(data) * 100)`% were 'Dissatisfied' or 'Very dissatisfied'.
+
+### Cycle friendliness
+
+```{r}
+q <- respondents %>% select(starts_with("3.4")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(friend = factor(.data[[q]],
+                         levels = c("Very cyclist-friendly", "Somewhat friendly to cyclists",
+                                    "Neutral", "Somewhat unfriendly to cyclists",
+                                    "Very unfriendly to cyclists")),
+         friend = fct_rev(friend))
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+
+plot <- ggplot(data, aes(x = friend)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Cycle friendliness",
+    y       = "Number of participants"
+  ) +
+  coord_flip() +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/3.4 friendliness.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+Responses to this question were also split, though leaning towards negative, with around `r round(nrow(data %>% filter(friend %in% c("Somewhat friendly to cyclists", "Very cyclist-friendly"))) / nrow(data) * 100)`% saying their suburb was somewhat or very friendly to cyclists, while around `r round(nrow(data %>% filter(friend %in% c("Somewhat unfriendly to cyclists", "Very unfriendly to cyclists"))) / nrow(data) * 100)`% considering their suburb somewhat or very unfriendly.
+
+### Cycling encouragement
+
+```{r}
+q <- respondents %>% select(starts_with("3.5")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(encourage = ifelse(.data[[q]] == "No, not all encouraged",
+                            "No, not at all encouraged", .data[[q]]),
+         encourage = factor(encourage,
+                            levels = c("Yes, strongly encouraged", "Yes, to some extent",
+                                       "Neutral", "No, not really encouraged",
+                                       "No, not at all encouraged")),
+         encourage = fct_rev(encourage))
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+
+plot <- ggplot(data, aes(x = encourage)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Cycling encouragement",
+    y       = "Number of participants"
+  ) +
+  coord_flip() +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/3.5 encouragement.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+Most participants (`r round(nrow(data %>% filter(encourage %in% c("No, not really encouraged", "No, not at all encouraged"))) / nrow(data) * 100)`%) felt that cycling was 'not really' or 'not at all' adequately encouraged and promoted.
+
+### Cycling condition improvements
+
+```{r}
+q <- respondents %>% select(starts_with("3.6")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(improv = factor(.data[[q]],
+                         levels = c("Much better", "Somewhat better",
+                                    "About the same", "Somewhat worse",
+                                    "Much worse", "Not sure")))
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+
+plot <- ggplot(data, aes(x = improv)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Change in cycling conditions",
+    y       = "Number of participants"
+  ) +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/3.6 improvements.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+Most participants (`r round(nrow(data %>% filter(improv == "About the same")) / nrow(data) * 100)`%) considered that cycling conditions had not changed in their suburb in the past year.
+
+### End-of-trip facilities
+
+```{r}
+q <- respondents %>% select(starts_with("3.7")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(endoftrip = factor(.data[[q]],
+                            levels = c("Excellent", "Good", "Average", "Poor",
+                                       "Very poor", "No end of trip facilities")),
+         endoftrip = fct_rev(endoftrip))
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+
+plot <- ggplot(data, aes(x = endoftrip)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "End of trip facilities",
+    y       = "Number of participants"
+  ) +
+  coord_flip() +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/3.7 end-of-trip.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+The most common answer (`r round(nrow(data %>% filter(endoftrip == "Average")) / nrow(data) * 100)`%) was 'average', though around `r round(nrow(data %>% filter(endoftrip %in% c("Poor", "Very poor", "No end of trip facilities"))) / nrow(data) * 100)`% answered that end-of-trip facilities were poor, very poor or non-existent.
+
+### Preferred road type
+
+
+```{r}
+
+col_names <- names(respondents)
+q_cols <- col_names[startsWith(col_names, "3.8")]
+
+q <- stringr::str_extract(q_cols[1], ".*\\)")  # part of col name before )
+
+data <- valid_responses %>% 
+  select(all_of(q_cols)) %>%
+  rename_with(~ str_replace(.x, "^.*?\\):\\s*", "")) %>% 
+  pivot_longer(everything(), names_to = "type", values_to = "value") %>%
+  filter(value == TRUE) %>%
+  mutate(type = str_replace(type, "paves", "paved"),
+         type = type %>% 
+           fct_infreq() %>%
+           fct_rev())
+         
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 5}
+plot <- ggplot(data, aes(x = type)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x = "Preferred road type",
+    y = "Number of participants"
+  ) +
+  coord_flip() +
+  theme_bw()
+
+plot
+ggsave(paste0(plot_folder, "/2.8 road type.png"), plot,
+       width = 18, height = 12, units = "cm")
+
+```
+
+'Paved off-street multiuse paths' (`r round(nrow(data %>% filter(type == "Paved off-street multiuse paths")) / nrow(data) * 100)`%) and 'paved off-street cycle paths for bikes only' (`r round(nrow(data %>% filter(type == "Paved off-street cycle paths for bikes only")) / nrow(data) * 100)`) were the most-preferred surfaces, indicating a high preference for both separation from traffic and paved surfaces.
+
+### Cycling initiative priorities
+
+```{r}
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "off-road")          ~ "More off-road paths",
+    str_detect(x, "on-road")           ~ "More on-road lanes",
+    str_detect(x, "schools")           ~ "Better connections to schools",
+    str_detect(x, "shops")             ~ "Better connections to shops",
+    str_detect(x, "parks")             ~ "Better connections to parks/pools",
+    str_detect(x, "public transport")  ~ "Better connections to PT",
+    str_detect(x, "parking")           ~ "More bicycle parking",
+    str_detect(x, "separated cycling") ~ "Lack of separation",
+    str_detect(x, "speed limits")      ~ "Lower speed limits",
+    str_detect(x, "training")          ~ "More training",
+    str_detect(x, "signs")             ~ "More signage",
+    str_detect(x, "events")            ~ "More events/campaings",
+    TRUE                               ~ NA_character_
+  )
+}
+
+col_names <- names(respondents)
+q_cols <- col_names[startsWith(col_names, "3.9")]
+
+q <- stringr::str_extract(q_cols[1], "^[^:]+")  # part of col name before colon
+
+responses <- data.frame(
+  response = str_replace(q_cols, "^.*?:\\s*", ""),  # everything after colon
+  stringsAsFactors = FALSE
+) %>%
+  mutate(category = categorise(response))
+
+data <- valid_responses %>% 
+  select(all_of(q_cols)) %>%
+  rename_with(~ str_replace(q_cols, "^.*?:\\s*", "")) %>% 
+  pivot_longer(everything(), names_to = "initiative", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  mutate(positive = if_else(value %in% c("Very high", "High"), 1L, 0L)) %>%
+  mutate(category = categorise(initiative)) %>%
+  group_by(category) %>%
+  mutate(positive_count = sum(positive, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(category = fct_reorder(category, positive_count),
+         category = fct_rev(category),
+         value = factor(value,
+                        levels = c("Very high",
+                                   "High",
+                                   "Moderate",
+                                   "Low",
+                                   "Very low",
+                                   "Not a priority")),
+         value = fct_rev(value))
+
+caption_text <- responses %>%
+  arrange(factor(category, levels = levels(data$category))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 5}
+plot <- ggplot(data, aes(x = fct_rev(category), fill = value)) +
+  geom_bar() +
+  scale_fill_brewer(palette = "RdBu") +
+  labs(
+    x = "Initiative priorities",
+    y = "Number of participants",
+    fill = "Priority level",
+    caption = caption_text
+  ) +
+  coord_flip() +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0),
+        plot.caption.position = "plot",
+        legend.position = "bottom") +
+  guides(fill = guide_legend(reverse = TRUE))
+
+plot
+ggsave(paste0(plot_folder, "/3.9 initiatives.png"), plot,
+       width = 18, height = 15, units = "cm")
+
+```
+
+The answer with the highest level of 'High' or 'Very high' priority was 'More off-road paths' (`r round(nrow(data %>% filter(category == "More off-road paths" & value %in% c("Very high", "High"))) / nrow(data %>% filter(category == "More off-road paths")) * 100)`%), indicating the strong desire of many participants for separation from traffic.
+
+### Willingness to detour for dedicated paths
+
+```{r}
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "Significant")  ~ "Significant",
+    str_detect(x, "Considerable") ~ "Considerable",
+    str_detect(x, "Moderate")     ~ "Moderate",
+    str_detect(x, "Minor")        ~ "Minor",
+    str_detect(x, "No detour")    ~ "No detour",
+    str_detect(x, "Undecided")    ~ "Undecided",
+    TRUE                          ~ NA_character_
+  )
+}
+
+q <- respondents %>% select(starts_with("3.10")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(category = categorise(.data[[q]]),
+         category = factor(category,
+                         levels = c("Significant", "Considerable",
+                                    "Moderate", "Minor",
+                                    "No detour", "Undecided")))
+
+responses <- respondents %>%
+  distinct(response = .data[[q]]) %>%
+  mutate(category = categorise(response))
+
+caption_text <- responses %>%
+  filter(!is.na(category) & !category %in% c("No detour", "Undecided")) %>% 
+  arrange(factor(category,
+                 levels = c("Significant", "Considerable", "Moderate", 
+                            "Minor", "No detour", "Undecided"))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+plot <- ggplot(data, aes(x = category)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Willingness to detour for dedicated paths",
+    y       = "Number of participants",
+    caption = caption_text
+  ) +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0))
+
+plot
+ggsave(paste0(plot_folder, "/3.10 detour paths.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+The most common answer was 'moderate' (`r round(nrow(data %>% filter(category == "Moderate")) / nrow(data) * 100)`%), with around `r round(nrow(data %>% filter(category %in% c("Moderate", "Considerable", "Significant"))) / nrow(data) * 100)`% of participants being willing to make a 'moderate', 'considerable' or 'significant' detour to have access to a dedicated bicycle path.
+
+### Willingness to detour for greenery
+
+```{r}
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "Significant")  ~ "Significant",
+    str_detect(x, "Considerable") ~ "Considerable",
+    str_detect(x, "Moderate")     ~ "Moderate",
+    str_detect(x, "Minor")        ~ "Minor",
+    str_detect(x, "No detour")    ~ "No detour",
+    str_detect(x, "Undecided")    ~ "Undecided",
+    TRUE                          ~ NA_character_
+  )
+}
+
+q <- respondents %>% select(starts_with("3.11")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(category = categorise(.data[[q]]),
+         category = factor(category,
+                         levels = c("Significant", "Considerable",
+                                    "Moderate", "Minor",
+                                    "No detour", "Undecided")))
+
+responses <- respondents %>%
+  distinct(response = .data[[q]]) %>%
+  mutate(category = categorise(response))
+
+caption_text <- responses %>%
+  filter(!is.na(category) & !category %in% c("No detour", "Undecided")) %>% 
+  arrange(factor(category,
+                 levels = c("Significant", "Considerable", "Moderate", 
+                            "Minor", "No detour", "Undecided"))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+plot <- ggplot(data, aes(x = category)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Willingness to detour for greenery",
+    y       = "Number of participants",
+    caption = caption_text
+  ) +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0))
+
+plot
+ggsave(paste0(plot_folder, "/3.11 detour greenery.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+Participants were less willing to detour for greenery than for separated cycle infrastructure, with only around `r round(nrow(data %>% filter(category %in% c("Moderate", "Considerable", "Significant"))) / nrow(data) * 100)`% being willing to make a 'moderate', 'considerable' or 'significant' detour, and around `r round(nrow(data %>% filter(category == "No detour")) / nrow(data) * 100)`% not being willing to make any detour.
+
+### Willingness to detour for flat route
+
+```{r}
+categorise <- function(x) {
+  case_when(
+    str_detect(x, "Significant")  ~ "Significant",
+    str_detect(x, "Considerable") ~ "Considerable",
+    str_detect(x, "Moderate")     ~ "Moderate",
+    str_detect(x, "Minor")        ~ "Minor",
+    str_detect(x, "No detour")    ~ "No detour",
+    str_detect(x, "Undecided")    ~ "Undecided",
+    TRUE                          ~ NA_character_
+  )
+}
+
+q <- respondents %>% select(starts_with("3.12")) %>% names()
+
+data <- valid_responses %>%
+  select(all_of(q)) %>%
+  filter(!is.na(.data[[q]])) %>%
+  mutate(category = categorise(.data[[q]]),
+         category = factor(category,
+                         levels = c("Significant", "Considerable",
+                                    "Moderate", "Minor",
+                                    "No detour", "Undecided")))
+
+responses <- respondents %>%
+  distinct(response = .data[[q]]) %>%
+  mutate(category = categorise(response))
+
+caption_text <- responses %>%
+  filter(!is.na(category) & !category %in% c("No detour", "Undecided")) %>% 
+  arrange(factor(category,
+                 levels = c("Significant", "Considerable", "Moderate", 
+                            "Minor", "No detour", "Undecided"))) %>%
+  mutate(full = paste0(category, ": ", response)) %>%
+  pull(full) %>%
+  paste(collapse = "\n")
+
+
+```
+
+**`r q`**
+
+```{r fig.width = 8, fig.height = 4}
+plot <- ggplot(data, aes(x = category)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    x       = "Willingness to detour for flat route",
+    y       = "Number of participants",
+    caption = caption_text
+  ) +
+  theme_bw() +
+  theme(plot.caption = element_text(hjust = 0))
+
+plot
+ggsave(paste0(plot_folder, "/3.12 detour flat.png"), plot,
+       width = 18, height = 9, units = "cm")
+
+```
+
+Results for this question were varied, with the most common answer being 'moderate' (`r round(nrow(data %>% filter(category == "Moderate")) / nrow(data) * 100)`%), and around `r round(nrow(data %>% filter(category %in% c("Moderate", "Considerable", "Significant"))) / nrow(data) * 100)`% of participants being willing to make a 'moderate', 'considerable' or 'significant' detour to achieve a flatter trip, but also around `r round(nrow(data %>% filter(category == "No detour")) / nrow(data) * 100)`% not being willing to make any detour to avoid hills.
