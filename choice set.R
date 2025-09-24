@@ -58,7 +58,7 @@ dir_walk(path="./functions/",source, recurse=T, type = "file")
 ## ------------------------------------# 
 
 # network file
-NETWORK_FILE <- "../network v20250512 unsimplified/network.sqlite"  # note - all one way, contains LTS and other impedances
+NETWORK_FILE <- "../network v20250828 unsimplified/network.sqlite"  # note - all one way, contains LTS and other impedances
 LINK_LAYER <- "links"
 NODE_LAYER <- "nodes"
 
@@ -254,7 +254,7 @@ for (i in seq_along(weight_fields)) {
 }
 
 
-xz# 3 Routing - BFSLE ----
+# 3 Routing - BFSLE ----
 # -----------------------------------------------------------------------------#
 
 # This section finds routes using breadth-first search on link elimination (BFSLE)

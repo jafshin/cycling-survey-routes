@@ -45,7 +45,7 @@ if (city == "Melbourne") {
                       "9pt99buo346p_1", "2t66ibj3wkt8_1")  # maps 353, 376, 542, 554, 517, 66?
   
 } else if (city == "Bendigo") {
-  networkFile <- "../network v20250512 unsimplified/network.sqlite"  # note - all one way, contains LTS and other impedances
+  networkFile <- "../network v20250828 unsimplified/network.sqlite"  # note - all one way, contains LTS and other impedances
   linkLayer <- "links"
   nodeLayer <- "nodes"
   surveyFile <- "../Bendigo survey/responses-8gi6nyx69dt6-2025-07-10T04_40_41.798Z.xlsx"
