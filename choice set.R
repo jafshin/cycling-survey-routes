@@ -82,6 +82,7 @@ OUTPUT.CHOICE.SET.FILE <- paste0(OUTPUT.DIR, "/choice_set.sqlite")
 OUTPUT.BFSLE.DISCARD.FILE <- paste0(OUTPUT.DIR, "/bfsle_discards.csv")
 OUTPUT.RAND.DISCARD.FILE <- paste0(OUTPUT.DIR, "/rand_discards.csv")
 CHOICE.SET.EXPANDED.FILE <- paste0(OUTPUT.DIR, "/choice_set_expanded.csv")
+OUTPUT.ROUTE.INTERSECTIONS.FILE <- paste0(OUTPUT.DIR, "./choice_set_intersections.csv")
 
 # 1 Load and set up data ----
 # -----------------------------------------------------------------------------#
@@ -755,5 +756,38 @@ choice_set_expanded <-
 
 # write output
 write.csv(choice_set_expanded, CHOICE.SET.EXPANDED.FILE, row.names = FALSE)
+
+
+# 8 Intersections   ----
+# -----------------------------------------------------------------------------#
+# This section counts, for each route,  the number of intersections, and those with
+# high LTS (ie LTS of level 3 or 4 on the highest-rated road at the intersection)
+
+# Includes only counting intersections with car traffic, and not treating signalised as high
+
+# read in routes_networked and network links
+choice_set <- st_read(OUTPUT.CHOICE.SET.FILE)
+links <- st_read(NETWORK_FILE, layer = LINK_LAYER)
+nodes <- st_read(NETWORK_FILE, layer = NODE_LAYER)
+
+# find number of intersections, and those with high LTS
+route_intersections <- 
+  countIntersections(choice_set %>%
+                       st_drop_geometry() %>%
+                       dplyr::select(any_of(c(routeid = "routeid_type", 
+                                              "network_nodes", "network_edges"))),
+                     links %>% 
+                       st_drop_geometry() %>%
+                       filter(!modes %in% c("bus", "train")) %>%
+                       dplyr::select(any_of(c("link_id", "from_id", "to_id",  
+                                              link_stress = "lvl_traf_stress",
+                                              "is_car"))),
+                     nodes %>%
+                       st_drop_geometry() %>%
+                       dplyr::select(any_of(c("id", "type"))))
+
+# write output
+write.csv(route_intersections, OUTPUT.ROUTE.INTERSECTIONS.FILE,
+          row.names = FALSE)
 
 

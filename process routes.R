@@ -21,6 +21,7 @@
 # 8 Produce check maps showing the survey and networked routes
 # 9 Find routes that pass through 'stressful junctions'
 # 10 Produce an expanded version of the output routes with network link details attached
+# 11 For each route, show number of intersections, and those with high LTS
 
 # select city
 # city <- "Melbourne"
@@ -38,6 +39,7 @@ if (city == "Melbourne") {
   outputRoutes <- "./data/routes_networked.sqlite"
   outputMapDir <- "./data/output maps"
   outputRoutesExpanded <- "./data/routes_networked_expanded.csv"
+  outputRouteIntersections <- "./data/routes_networked_intersections.csv"
   stressJctFile <- "./data/StressJct.csv"
   favSpotFile <- "./data/FavSpot.csv"
   circularRoutes <- c("7bep8cwz3fb6_2", "7l9g4utj97r6_1",
@@ -52,6 +54,7 @@ if (city == "Melbourne") {
   outputRoutes <- "../Bendigo survey/routes_networked.sqlite"
   outputMapDir <- "../Bendigo survey/output maps"
   outputRoutesExpanded <- "../Bendigo survey/routes_networked_expanded.csv"
+  outputRouteIntersections <- "../Bendigo survey/routes_networked_intersections.csv"
   stressJctSheet <- "Most stressful intersection(s) "
   favSpotSheet <- "My favorite spot(s) along the r"
   unfavSpotSheet <- "My least favorite spot(s) along"
@@ -841,3 +844,38 @@ routes_shortest_expanded <-
 # write output
 write.csv(routes_shortest_expanded, "./data/routes_shortest_expanded.csv",
           row.names = FALSE)
+
+
+# 10 Intersections   ----
+# -----------------------------------------------------------------------------#
+# For each route, count the number of intersections, and those with high LTS
+# (ie LTS of level 3 or 4 on the highest-rated road at the intersection)
+
+# Includes only counting intersections with car traffic, and not treating signalised as high
+
+# read in routes_networked and network links
+routes_networked <- st_read(outputRoutes, layer = "survey")
+links <- st_read(networkFile, layer = linkLayer)
+nodes <- st_read(networkFile, layer = nodeLayer)
+
+# find number of intersections, and those with high LTS
+route_intersections <- 
+  countIntersections(routes_networked %>%
+                       st_drop_geometry() %>%
+                       dplyr::select(any_of(c("routeid", 
+                                              "network_nodes", "network_edges"))),
+                     links %>% 
+                       st_drop_geometry() %>%
+                       filter(!modes %in% c("bus", "train")) %>%
+                       dplyr::select(any_of(c("link_id", "from_id", "to_id",  
+                                              link_stress = "lvl_traf_stress",
+                                              "is_car"))),
+                     nodes %>%
+                       st_drop_geometry() %>%
+                       dplyr::select(any_of(c("id", "type"))))
+
+# write output
+write.csv(route_intersections, outputRouteIntersections,
+          row.names = FALSE)
+
+
