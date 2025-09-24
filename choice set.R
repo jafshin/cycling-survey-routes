@@ -147,7 +147,7 @@ links <- cyclable.links %>%
          infra = ifelse(!is.na(cycleway), length * 0.001, length),  # any cycleway infrastructure, onroad or offroad
          speed = ifelse(freespeed <= 40 / 3.6, length * 0.001, length),  # speed <= 40 km/h
          flat = ifelse(slope_pct <= 2, length * 0.001, length),  # slope <= 2%, including all downhill (however steep)
-         green = ifelse(tcc_percent >= 25, length * 0.001, length),  # tree canopy coverage >= 25%
+         green = ifelse(tcc_percent >= 10, length * 0.001, length),  # tree canopy coverage >= 10%
          lts = ifelse(lvl_traf_stress %in% c(1, 2), length * 0.001, length)  # LTS level 1 or 2
   ) %>%
   
