@@ -372,8 +372,7 @@ for (i in 1:nrow(survey_routes)) {
             route.choice.set <- 
               bind_rows(route.choice.set,
                         output.route %>%
-                          mutate(routeid_type = paste0(route_no, "-bfsle-", found),
-                                 commonality = commonality))
+                          mutate(routeid_type = paste0(route_no, "-bfsle-", found)))
             
             if (found >= BFSLE.TARGET) break  # breaks out of j-loop
             if (found + discards >= BFSLE.MAX.ITERATIONS) break  # breaks out of j-loop
@@ -539,8 +538,7 @@ while (iterations < RAND.MAX.ITERATIONS) {
         # add found route to the choice set 
         choice_set <- bind_rows(choice_set,
                                 output.route %>%
-                                  mutate(routeid_type = paste0(output.routeid, "-rand-", routesfound),
-                                         commonality = commonality))
+                                  mutate(routeid_type = paste0(output.routeid, "-rand-", routesfound)))
         
       } else {
         
@@ -590,6 +588,35 @@ while (iterations < RAND.MAX.ITERATIONS) {
 
 # write discards
 write.csv(rand.discards, OUTPUT.RAND.DISCARD.FILE, row.names = FALSE)
+
+# add commonality calculation - for each survey route, this is the maximum commonality
+# of each route in its choice set against each other route in its choice set
+for (i in 1:nrow(survey_routes)) {
+  
+  # routeid and report
+  route_no <- survey_routes$routeid[i]
+  print(paste(Sys.time(), "|", "Calculating max_commonality for survey route no", route_no))
+  
+  # route choice set for the route
+  route.choice.set <- choice_set %>%
+    filter(routeid == route_no)
+  
+  # only proceed if there are more than one route
+  if (nrow(route.choice.set) > 1) {
+    
+    for (j in 1:nrow(route.choice.set)) {
+      test.route <- route.choice.set[j, , drop = FALSE]
+      other.routes <- route.choice.set[-j, , drop = FALSE]
+      
+      #calculate commonality against all other routes of the set (without printing messages to console)
+      invisible(capture.output(
+        commonality <- testCommonality(test.route, other.routes, links, Inf)
+      ))
+      
+      choice_set$max_commonality[choice_set$routeid_type == test.route$routeid_type] <- commonality
+    }
+  }
+}
 
 # write choice set
 st_write(choice_set, OUTPUT.CHOICE.SET.FILE, delete_layer = TRUE)
