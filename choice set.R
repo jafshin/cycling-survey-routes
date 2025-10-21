@@ -372,7 +372,8 @@ for (i in 1:nrow(survey_routes)) {
             route.choice.set <- 
               bind_rows(route.choice.set,
                         output.route %>%
-                          mutate(routeid_type = paste0(route_no, "-bfsle-", found)))
+                          mutate(routeid_type = paste0(route_no, "-bfsle-", found),
+                                 commonality = commonality))
             
             if (found >= BFSLE.TARGET) break  # breaks out of j-loop
             if (found + discards >= BFSLE.MAX.ITERATIONS) break  # breaks out of j-loop
@@ -538,7 +539,8 @@ while (iterations < RAND.MAX.ITERATIONS) {
         # add found route to the choice set 
         choice_set <- bind_rows(choice_set,
                                 output.route %>%
-                                  mutate(routeid_type = paste0(output.routeid, "-rand-", routesfound)))
+                                  mutate(routeid_type = paste0(output.routeid, "-rand-", routesfound),
+                                         commonality = commonality))
         
       } else {
         
