@@ -66,12 +66,18 @@ NODE_LAYER <- "nodes"
 SURVEY_ROUTE_FILE <- "../Bendigo survey/routes_networked.sqlite"
 SURVEY_ROUTE_LAYER <- "survey"
 
-# commonality ceiling (max level of commonality), targets, etc
+# preferred attributes to find (must be some or all of 'weight_fields' as defined in section 1.1)
+# PREF.ATTR <- c("short", "infra", "speed", "flat", "green", "lts") # for all available weight fields
+PREF.ATTR <- "short"  # for shortest path only
+
+# commonality ceiling (max level of commonality), detour cap, targets, etc
 # COMMONALITY.CEILING <- 0.95  # ie at least 5% difference
 COMMONALITY.CEILING <- 0.8  # ie at least 20% difference
-BFSLE.TARGET <- 5  # no of BFSLE routes to find
-RAND.TARGET <- 5  # no of random weight routes to find
-RAND.MAX.ITERATIONS <- 500  # no of iterations of random loop before exit
+DETOUR.CAP <- 2  # max length, as a multiple of shortest length (if no max, put 'Inf')
+BFSLE.TARGET <- 15  # no of BFSLE routes to find
+BFSLE.MAX.ITERATIONS <- 1000  # no of bfsle iterations for each route before exit
+RAND.TARGET <- 15  # no of random weight routes to find
+RAND.MAX.ITERATIONS <- 1000  # no of iterations of random loop before exit
 
 # output directories and files
 OUTPUT.DIR <- "../Bendigo survey/choice set"
@@ -143,7 +149,8 @@ links <- cyclable.links %>%
   ungroup() %>%
   
 
-  # calculate weights as required by specific attribute preferences
+  # calculate weights as required by specific attribute preferences (note - all are
+  # calculated, but only those which are included in PREF.ATTR will be used)
   mutate(short = length,
          infra = ifelse(!is.na(cycleway), length * 0.001, length),  # any cycleway infrastructure, onroad or offroad
          speed = ifelse(freespeed <= 40 / 3.6, length * 0.001, length),  # speed <= 40 km/h
@@ -225,14 +232,14 @@ rm(all.links, all.cyclable.links, all.cyclable.nodes, largest.component,
 # in section 1.1.
 
 # find routes for preferred attributes and add to choice set
-for (i in seq_along(weight_fields)) {
+for (i in seq_along(PREF.ATTR)) {
   
   # report
-  print(paste(Sys.time(), "| Finding routes for preferred attribute:", weight_fields[i]))
+  print(paste(Sys.time(), "| Finding routes for preferred attribute:", PREF.ATTR[i]))
   
   # construct the least-cost path statement
   routing.statement <- paste("
-        SELECT * FROM pgr_dijkstra('SELECT id, source, target,", weight_fields[i], "AS cost FROM links',
+        SELECT * FROM pgr_dijkstra('SELECT id, source, target,", PREF.ATTR[i], "AS cost FROM links',
                            'SELECT source, target FROM combinations',
                            directed => true); 
        ")
@@ -243,7 +250,7 @@ for (i in seq_along(weight_fields)) {
            node = as.numeric(node), edge = as.numeric(edge))
   
   # convert output paths to rows
-  output.routes <- outputToRowCombo(routing.output, survey_routes, links, weight_fields[i])
+  output.routes <- outputToRowCombo(routing.output, survey_routes, links, PREF.ATTR[i])
   
   # add to choice set
   if (i == 1) {
@@ -291,13 +298,16 @@ for (i in 1:nrow(survey_routes)) {
     # randomise order
     sample()
   
+  # shortest route length
+  route.shortest.length <- route$length
+  
   # initialise counters and next list
   found <- 0
   discards <- 0
   next.link.list <- list()
   
   # loop to find BFSLE routes
-  while (found < BFSLE.TARGET) {
+  while (found < BFSLE.TARGET && found + discards < BFSLE.MAX.ITERATIONS) {
     
     for (j in seq_along(link.list)) {
       
@@ -343,34 +353,49 @@ for (i in 1:nrow(survey_routes)) {
         # convert new shortest path to row
         output.route <- outputToRow(routing.output, links)
         
-        # test commonality of new route against route.choice.set
-        commonality <- testCommonality(output.route, route.choice.set,
-                                       links, COMMONALITY.CEILING)
-        
-        # if new route meets the commonality test, add to route.choice.set
-        if (commonality <= COMMONALITY.CEILING) {
+        # test length against detour cap (and only test commonality if below cap)
+        if (output.route$length <= route.shortest.length * DETOUR.CAP) {
+
+          # test commonality of new route against route.choice.set
+          commonality <- testCommonality(output.route, route.choice.set,
+                                         links, COMMONALITY.CEILING)
           
-          # increment 'found' and report
-          found <- found + 1
-          print(paste("New route found: routes found", found))
           
-          # add route to route.choice.set for route i
-          route.choice.set <- 
-            bind_rows(route.choice.set,
-                      output.route %>%
-                        mutate(routeid_type = paste0(route_no, "-bfsle-", found)))
-          
-          if (found >= BFSLE.TARGET) break  # breaks out of j-loop
+          # if new route meets the commonality test, add to route.choice.set
+          if (commonality <= COMMONALITY.CEILING) {
+            
+            # increment 'found' and report
+            found <- found + 1
+            print(paste("New route found: routes found", found))
+            
+            # add route to route.choice.set for route i
+            route.choice.set <- 
+              bind_rows(route.choice.set,
+                        output.route %>%
+                          mutate(routeid_type = paste0(route_no, "-bfsle-", found)))
+            
+            if (found >= BFSLE.TARGET) break  # breaks out of j-loop
+            if (found + discards >= BFSLE.MAX.ITERATIONS) break  # breaks out of j-loop
+            
+          } else {
+            
+            # if doesn't meet commonality test - increment 'discards' and report
+            discards <- discards + 1
+            print(paste("Route discarded as didn't meet commonality test: routes discarded", discards))
+            if (found + discards >= BFSLE.MAX.ITERATIONS) break  # breaks out of j-loop
+            
+          }
           
         } else {
           
-          # increment 'discards' and report
+          # if exceeds discard cap: increment 'discards' and report
           discards <- discards + 1
-          print(paste("Route discarded: routes discarded", discards))
+          print(paste("Route discarded as exceeded detour cap: routes discarded", discards))
+          if (found + discards >= BFSLE.MAX.ITERATIONS) break  # breaks out of j-loop
           
         }
-        
-        # whether or not route meets commonality test, add links omitted in 
+ 
+        # whether or not route meets detour cap and commonality test, add links omitted in 
         # this iteration, plus each link in the new route, to next.link.list
         output.route.links <- as.numeric(unlist(str_split(output.route$network_edges, ", ")))
         for (m in seq_along(output.route.links)) {
@@ -383,7 +408,7 @@ for (i in 1:nrow(survey_routes)) {
       
     }  # end j-loop
     
-    if (found < BFSLE.TARGET) {
+    if (found < BFSLE.TARGET && found + discards < BFSLE.MAX.ITERATIONS) {
       
       # move to next level by setting next.link.list as link.list, random order
       link.list <- next.link.list %>% sample()
@@ -400,7 +425,7 @@ for (i in 1:nrow(survey_routes)) {
       depth <- depth + 1
       print(paste("Searching at depth level:", depth))
       
-    }  # end if-statement (found < target)
+    }  # end if-statement (found < target & found+discards < max.iterations)
     
   }  # end while-loop
   
@@ -478,7 +503,7 @@ while (iterations < RAND.MAX.ITERATIONS) {
   # convert output paths to rows
   output.routes <- outputToRowCombo(routing.output, survey_routes, links, "rand")
   
-  # for each route, test commonality against route choice set
+  # for each route, test detour cap and commonality against route choice set
   for (i in 1:nrow(output.routes)) {
     
     output.route <- output.routes[i,]
@@ -487,34 +512,54 @@ while (iterations < RAND.MAX.ITERATIONS) {
     route.choice.set <- choice_set %>%
       filter(routeid == output.routeid)
     
-    print(paste("Checking commonality for routeid:", output.routeid))
+    shortest.route.length <- route.choice.set  %>%
+      filter(str_detect(routeid_type, "short")) %>%
+      pull(length)
     
-    # test commonality of new route against route.choice.set
-    commonality <- testCommonality(output.route, route.choice.set,
-                                   links, COMMONALITY.CEILING)
-    
-    # if new route meets the commonality test, add to route.choice.set
-    if (commonality <= COMMONALITY.CEILING) {
+    # test length against detour cap  (and only test commonality if below cap)
+    if (output.route$length <= route.shortest.length * DETOUR.CAP) {
       
-      # increment 'found' and report
-      rand.discards[rand.discards$routeid == output.routeid, "found"] <- 
-        rand.discards[rand.discards$routeid == output.routeid, "found"] + 1
-      routesfound <- rand.discards[rand.discards$routeid == output.routeid, "found"]
-      print(paste("New route found for routeid", output.routeid, ":", routesfound,
-                  "route(s) found"))
+      # test commonality of new route against route.choice.set
+      print(paste("Checking commonality for routeid:", output.routeid))
       
-      # add found route to the choice set 
-      choice_set <- bind_rows(choice_set,
-                              output.route %>%
-                                mutate(routeid_type = paste0(output.routeid, "-rand-", routesfound)))
-
+      commonality <- testCommonality(output.route, route.choice.set,
+                                     links, COMMONALITY.CEILING)
+      
+      # if new route meets the commonality test, add to route.choice.set
+      if (commonality <= COMMONALITY.CEILING) {
+        
+        # increment 'found' and report
+        rand.discards[rand.discards$routeid == output.routeid, "found"] <- 
+          rand.discards[rand.discards$routeid == output.routeid, "found"] + 1
+        routesfound <- rand.discards[rand.discards$routeid == output.routeid, "found"]
+        print(paste("New route found for routeid", output.routeid, ":", routesfound,
+                    "route(s) found"))
+        
+        # add found route to the choice set 
+        choice_set <- bind_rows(choice_set,
+                                output.route %>%
+                                  mutate(routeid_type = paste0(output.routeid, "-rand-", routesfound)))
+        
+      } else {
+        
+        # if doesn't meet commonality test: increment 'discards' and report
+        rand.discards[rand.discards$routeid == output.routeid, "discards"] <- 
+          rand.discards[rand.discards$routeid == output.routeid, "discards"] + 1
+        routediscards <- rand.discards[rand.discards$routeid == output.routeid, "discards"]
+        print(paste("Route discarded for routeid", output.routeid, 
+                    "as didn't meet commonality test:", routediscards,
+                    "route(s) discarded"))
+        
+      }
+      
     } else {
       
-      # increment 'discards' and report
+      # if exceeds detour cap: increment 'discards' and report
       rand.discards[rand.discards$routeid == output.routeid, "discards"] <- 
         rand.discards[rand.discards$routeid == output.routeid, "discards"] + 1
       routediscards <- rand.discards[rand.discards$routeid == output.routeid, "discards"]
-      print(paste("Route discarded for routeid", output.routeid, ":", routediscards,
+      print(paste("Route discarded for routeid", output.routeid, 
+                  "as exceeded detour cap:", routediscards,
                   "route(s) discarded"))
       
     }
@@ -524,7 +569,7 @@ while (iterations < RAND.MAX.ITERATIONS) {
   # update 'combinations' so it only contains routes for which the required
   # number of random routes hasn't yet been found
   routes.to.find <- paste(rand.discards %>%
-                            filter(found < 5) %>%
+                            filter(found < RAND.TARGET) %>%
                             .$routeid,
                           collapse = ", ")
   
