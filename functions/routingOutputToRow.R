@@ -34,19 +34,15 @@ outputToRow <- function(routing.output, links) {
 outputToRowCombo <- function(routing.output, survey_routes, links, type) {
   
   # join the output to route ids and link geometries
-  routing.output.joined <- routing.output %>%
-    
-    # join to route ids (right, because multiple survey routes could share an output)
-    right_join(survey_routes %>%
-                 st_drop_geometry() %>%
-                 dplyr::select(routeid, start_node, end_node),
-               by = c("start_vid" = "start_node", "end_vid" = "end_node"),
-               relationship = "many-to-many") %>%
-    
+  routing.output.joined <- survey_routes %>%
+    st_drop_geometry() %>%
+    dplyr::select(routeid, start_node, end_node) %>%
+    left_join(routing.output, by = c("start_node" = "start_vid",
+                                     "end_node" = "end_vid"),
+              relationship = "many-to-many") %>%
     # join to links to add geometry
     left_join(links %>% dplyr::select(link_id, length), by = c("edge" = "link_id"))
-  
-  
+
   # combine geometries for each routeid
   routing.output.geoms <- routing.output.joined %>%
     group_by(routeid) %>%
