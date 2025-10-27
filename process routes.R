@@ -22,6 +22,7 @@
 # 9 Find routes that pass through 'stressful junctions'
 # 10 Produce an expanded version of the output routes with network link details attached
 # 11 For each route, show number of intersections, and those with high LTS
+# 12 Produce a table showing gender/age for the rider for each route
 
 # select city
 # city <- "Melbourne"
@@ -879,3 +880,25 @@ write.csv(route_intersections, outputRouteIntersections,
           row.names = FALSE)
 
 
+# 11 Route age/gender  ----
+# -----------------------------------------------------------------------------#
+# For each route, show the gender and age of the rider
+
+# read in routes networked (which contains route and respondent ids) and
+# respondent details
+routes_networked <- st_read(outputRoutes, layer = "survey")
+surveyFile <- "../Bendigo survey/responses-8gi6nyx69dt6-2025-07-10T04_40_41.798Z.xlsx"
+respondents <- read_excel(surveyFile, sheet = "Respondents")
+
+# combine the details
+route.age.gender.table <- routes_networked %>%
+  st_drop_geometry() %>%
+  dplyr::select(routeid, respondentid) %>%
+  left_join(respondents %>%
+              dplyr::select(respondentid = `Respondent ID`, 
+                            gender = `1.1 How do you describe your gender?`,
+                            age = `1.2 Please enter your age`),
+            by = "respondentid")
+
+# write output
+write.csv(route.age.gender.table, "../Bendigo survey/routes gender age.csv", row.names = F)
