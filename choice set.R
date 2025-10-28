@@ -66,7 +66,7 @@ NODE_LAYER <- "nodes"
 SURVEY_ROUTE_FILE <- "../Bendigo survey/routes_networked.sqlite"
 SURVEY_ROUTE_LAYER <- "survey"
 
-# preferred attributes to find (must be some or all of 'weight_fields' as defined in section 1.1)
+# preferred attributes to find (must be some or all of 'weight_fields' as defined in section 1.1, including 'short')
 # PREF.ATTR <- c("short", "infra", "speed", "flat", "green", "lts") # for all available weight fields
 PREF.ATTR <- "short"  # for shortest path only
 
@@ -75,8 +75,10 @@ PREF.ATTR <- "short"  # for shortest path only
 COMMONALITY.CEILING <- 0.8  # ie at least 20% difference
 DETOUR.CAP <- 2  # max length, as a multiple of shortest length (if no max, put 'Inf')
 BFSLE.TARGET <- 15  # no of BFSLE routes to find
+BFSLE.FINAL.TARGET <- 5 # no of BFSLE routes to keep
 BFSLE.MAX.ITERATIONS <- 1000  # no of bfsle iterations for each route before exit
 RAND.TARGET <- 15  # no of random weight routes to find
+RAND.FINAL.TARGET <- 5 # no of random weight routes to keep
 RAND.MAX.ITERATIONS <- 1000  # no of iterations of random loop before exit
 
 # output directories and files
@@ -619,10 +621,314 @@ for (i in 1:nrow(survey_routes)) {
 }
 
 # write choice set
-st_write(choice_set, OUTPUT.CHOICE.SET.FILE, delete_layer = TRUE)
+st_write(choice_set, OUTPUT.CHOICE.SET.FILE, layer = "choice_set", delete_layer = TRUE)
 
 
-# 5 Visualise outputs ----
+# 5 Discard analysis plots ----
+# -----------------------------------------------------------------------------#
+
+# This section prints plots of the distribution of the numbers of discards 
+# in finding the BFSLE and Rand routes
+
+# read in discard files
+bfsle.discards <- read.csv(OUTPUT.BFSLE.DISCARD.FILE)
+rand.discards <- read.csv(OUTPUT.RAND.DISCARD.FILE)
+
+# plot function
+discard.plot <- function(discard.file, mytitle) {
+  ggplot(discard.file, aes(x = discards)) +
+    geom_histogram(binwidth = 1, fill = "steelblue", color = "black") +
+    labs(
+      title = mytitle,
+      x = "Number of Discards",
+      y = "Frequency"
+    ) +
+    theme_bw()
+}
+
+# create and save plots
+bflse.discard.plot <- discard.plot(bfsle.discards, 
+                                   "Distribution of discards - BFSLE")
+rand.discard.plot <- discard.plot(rand.discards, 
+                                   "Distribution of discards - random weights")
+
+ggsave(paste0(OUTPUT.DIR, "/bfsle_discard_plot.png"), bflse.discard.plot, 
+       width = 15, height = 12, units = "cm")
+
+ggsave(paste0(OUTPUT.DIR, "/rand_discard_plot.png"), rand.discard.plot, 
+       width = 15, height = 12, units = "cm")
+
+
+# 6 Expanded choice set routes  ----
+# -----------------------------------------------------------------------------#
+# This section creates a table which is an expanded version of 'choice_set', 
+# with one row per link in each trip, and network details attached
+
+# If preferred attribute routes are to be selected from BFSLE and random, it
+# also selects these; and if not all BFSLE/random routes are to be retained, the 
+# excess routes (selected by commonality) are removed
+
+# read in routes_networked and network links
+choice_set <- st_read(OUTPUT.CHOICE.SET.FILE, layer = "choice_set") %>%
+  st_set_geometry("geom")
+all.links <- st_read(NETWORK_FILE, layer = LINK_LAYER)
+
+# expand routes_network by adding details listed below from links
+choice_set_expanded <- 
+  expandRoutes(choice_set %>%
+                 st_drop_geometry() %>%
+                 dplyr::select(any_of(c("routeid", "routeid_type", "network_edges"))),
+               all.links %>% 
+                 st_drop_geometry() %>%
+                 dplyr::select(any_of(c("link_id", "length", "highway", "cycleway", "freespeed",
+                                        "surface", "slope_pct", "ndvi", "ndvi_md", "ndvi_75", "ndvi_90",
+                                        "tcc_buffer", "tcc_percent",
+                                        "adt", "lvl_traf_stress"))))
+
+# determine whether additional preferred attributes are needed
+required_attributes <- weight_fields[!weight_fields %in% PREF.ATTR]
+
+# proceed with this block if more preferred attributes are needed, or if
+# bfsle or random routes need to be discarded, or both (otherwise, choice set and
+# expanded choice set are finalised)
+if (length(required_attributes) > 0 | 
+    BFSLE.FINAL.TARGET < BFSLE.TARGET |
+    RAND.FINAL.TARGET < RAND.TARGET) {
+  
+  # re-name routeid_type in choice set and expanded choice set
+  choice_set <- choice_set %>%
+    rename(orig_routeid_type = routeid_type)
+  choice_set_expanded <- choice_set_expanded %>%
+    rename(orig_routeid_type = routeid_type)
+  
+  # add required attributes (ie preferred attributes not already selected in section 2 above)
+  
+  if (length(required_attributes) > 0) {
+    # score routes for required attributes (assumes 'short' is already present)
+    choice_set_scores <- choice_set_expanded %>%
+      # calculate scores
+      group_by(orig_routeid_type) %>%
+      summarise(
+        infra = sum(length[!is.na(cycleway)]) / sum(length), # any cycleway infrastructure, onroad or offroad
+        speed = sum(length[freespeed <= 40 / 3.6]) / sum(length),  # speed <= 40 km/h
+        flat = sum(length[slope_pct <= 2]) / sum(length),  # slope <= 2%, including all downhill (however steep)
+        green = sum(length[tcc_percent >= 10]) / sum(length), # tree canopy coverage >= 10%
+        lts = sum(length[lvl_traf_stress %in% c(1, 2)]) / sum(length) # LTS level 1 or 2
+      ) %>%
+      ungroup() %>%
+      # keep only those which are 'required attributes' (ie haven't already been selected in section 2)
+      dplyr::select(orig_routeid_type, any_of(required_attributes)) %>%
+      left_join(choice_set %>% 
+                  st_drop_geometry() %>%
+                  dplyr::select(routeid, orig_routeid_type), 
+                by = "orig_routeid_type")
+    
+    # find routes for preferred attributes
+    preferred_routes <- choice_set_scores %>%
+      # randomize order within each routeid so ties get distributed
+      group_by(routeid) %>%
+      mutate(rand_order = runif(n())) %>%
+      ungroup() %>%
+      
+      # reshape longer so we can handle all scores in one column
+      pivot_longer(cols = all_of(required_attributes), names_to = "score_type", 
+                   values_to = "score_value") %>%
+      
+      # rank rows by score (and use random order to break ties)
+      group_by(routeid, score_type) %>%
+      arrange(routeid, score_type, desc(score_value), rand_order) %>%
+      slice(1) %>%  # pick the best for each score type
+      ungroup() %>%
+      
+      # select required rows
+      select(routeid, orig_routeid_type, score_type, score_value) %>%
+      
+      # allocate new routeid_type names
+      mutate(routeid_type = paste(routeid, score_type,sep = "-"))
+    
+    # allocated routes (preferred attribute routes selected in section 2, 
+    # plus new preferred attribute routes as allocated above)
+    allocated_routes <- c()
+    # preferred attribute routes selected in section 2
+    for (i in 1:length(PREF.ATTR)) {
+      selected_routes <- choice_set %>%
+        st_drop_geometry() %>%
+        filter(str_detect(orig_routeid_type, PREF.ATTR[i])) %>%
+        mutate(routeid_type = orig_routeid_type) %>%
+        dplyr::select(orig_routeid_type, routeid_type)
+      allocated_routes <- bind_rows(allocated_routes, selected_routes)
+    }
+    # new preferred attribute routes as allocated above
+    allocated_routes <- bind_rows(allocated_routes,
+                                  preferred_routes %>%
+                                    dplyr::select(orig_routeid_type, routeid_type))
+
+    # update choice_set by adding routeid_types where allocated
+    choice_set <- choice_set %>%
+      left_join(allocated_routes, by = "orig_routeid_type")
+  
+  } else {
+   
+    # where no preferred route types added, include an empty routeid_type column 
+    choice_set <- choice_set %>%
+      mutate(routeid_type = NA)
+  }
+  
+  # order bfsle and rand routes by commonality
+  
+  bfsle_reordered <- choice_set %>%
+    st_drop_geometry() %>%
+    # select where bfsle and haven't been allocated to a preferred attribute
+    filter(str_detect(orig_routeid_type, "bfsle") & is.na(routeid_type)) %>%
+    dplyr::select(routeid, orig_routeid_type, max_commonality) %>%
+    # allocate new bfsle numbers based on commonality order
+    group_by(routeid) %>%
+    arrange(max_commonality) %>%
+    mutate(reordered_routeid_type = paste(routeid, "bfsle", row_number(), sep = "-")) %>%
+    ungroup()
+  
+  rand_reordered <- choice_set %>%
+    st_drop_geometry() %>%
+    # select where rand and haven't been allocated to a preferred attribute
+    filter(str_detect(orig_routeid_type, "rand") & is.na(routeid_type)) %>%
+    dplyr::select(routeid, orig_routeid_type, max_commonality) %>%
+    # allocate new rand numbers based on commonality order
+    group_by(routeid) %>%
+    arrange(max_commonality) %>%
+    mutate(reordered_routeid_type = paste(routeid, "rand", row_number(), sep = "-")) %>%
+    ungroup()
+  
+  reordered <- bind_rows(bfsle_reordered, rand_reordered) %>%
+    dplyr::select(orig_routeid_type, reordered_routeid_type)
+  
+  # merge the reordered routeid_types into choice_set
+  choice_set <- choice_set %>%
+    left_join(reordered, by = "orig_routeid_type") %>%
+    mutate(routeid_type = ifelse(is.na(routeid_type), reordered_routeid_type, routeid_type)) %>%
+    dplyr::select(-reordered_routeid_type)
+
+  # remove excess bfsle and random routes, and put in 'choice_set_excluded'
+  excluded.bfsle <- c()
+  excluded.rand <- c()
+  choice_set_excluded <- c()
+  
+  if (BFSLE.FINAL.TARGET < BFSLE.TARGET) {
+    excluded.bfsle <- choice_set %>%
+      st_drop_geometry() %>%
+      filter(str_detect(routeid_type, "bfsle")) %>%
+      mutate(
+        bfsle_num = as.numeric(str_extract(routeid_type, "(?<=bfsle-)\\d+"))
+      ) %>%
+      filter(bfsle_num > BFSLE.FINAL.TARGET) %>%
+      pull(routeid_type)
+  }
+  
+  if (RAND.FINAL.TARGET < RAND.TARGET) {
+    excluded.rand <- choice_set %>%
+      st_drop_geometry() %>%
+      filter(str_detect(routeid_type, "rand")) %>%
+      mutate(
+        rand_num = as.numeric(str_extract(routeid_type, "(?<=rand-)\\d+"))
+      ) %>%
+      filter(rand_num > RAND.FINAL.TARGET) %>%
+      pull(routeid_type)
+  }
+  
+  excluded <- c(excluded.bfsle, excluded.rand)
+  
+  choice_set_excluded <- choice_set %>%
+    filter(routeid_type %in% excluded)
+  
+  choice_set <- choice_set %>%
+    filter(!routeid_type %in% excluded)
+  
+  # recalculate commonality for the updated choice set (values may be lower
+  # due to excluded routes, though values for preferred routes may be 1 where
+  # a single route is used for multiple preferred attributes)
+  for (i in unique(choice_set$routeid)) {
+    
+    # routeid and report
+    route_no <- i
+    print(paste(Sys.time(), "|", "Calculating max_commonality for survey route no", route_no))
+    
+    # route choice set for the route
+    route.choice.set <- choice_set %>%
+      filter(routeid == route_no)
+
+    # only proceed if there are more than one route
+    if (nrow(route.choice.set) > 1) {
+
+      for (j in 1:nrow(route.choice.set)) {
+        test.route <- route.choice.set[j, , drop = FALSE]
+        other.routes <- route.choice.set[-j, , drop = FALSE]
+
+        #calculate commonality against all other routes of the set (without printing messages to console)
+        invisible(capture.output(
+          commonality <- testCommonality(test.route, other.routes, links, Inf)
+        ))
+
+        choice_set$max_commonality[choice_set$routeid_type == test.route$routeid_type] <- commonality
+      }
+    }
+  }
+
+  # save updated choice set
+  st_write(choice_set, OUTPUT.CHOICE.SET.FILE, 
+           layer = "choice_set", delete_layer = TRUE)
+  st_write(choice_set_excluded, OUTPUT.CHOICE.SET.FILE, 
+           layer = "choice_set_excluded", delete_layer = TRUE)
+  
+  # re-run expanded choice set on updated choice set
+  choice_set_expanded <- 
+    expandRoutes(choice_set %>%
+                   st_drop_geometry() %>%
+                   dplyr::select(any_of(c("routeid", "routeid_type", "network_edges"))),
+                 all.links %>% 
+                   st_drop_geometry() %>%
+                   dplyr::select(any_of(c("link_id", "length", "highway", "cycleway", "freespeed",
+                                          "surface", "slope_pct", "ndvi", "ndvi_md", "ndvi_75", "ndvi_90",
+                                          "tcc_buffer", "tcc_percent",
+                                          "adt", "lvl_traf_stress"))))
+}
+
+# write output
+write.csv(choice_set_expanded, CHOICE.SET.EXPANDED.FILE, row.names = FALSE)
+
+
+# 7 Intersections   ----
+# -----------------------------------------------------------------------------#
+# This section counts, for each route,  the number of intersections, and those with
+# high LTS (ie LTS of level 3 or 4 on the highest-rated road at the intersection)
+
+# Includes only counting intersections with car traffic, and not treating signalised as high
+
+# read in routes_networked and network links
+choice_set <- st_read(OUTPUT.CHOICE.SET.FILE, layer = "choice_set")
+links <- st_read(NETWORK_FILE, layer = LINK_LAYER)
+nodes <- st_read(NETWORK_FILE, layer = NODE_LAYER)
+
+# find number of intersections, and those with high LTS
+route_intersections <- 
+  countIntersections(choice_set %>%
+                       st_drop_geometry() %>%
+                       dplyr::select(any_of(c(routeid = "routeid_type", 
+                                              "network_nodes", "network_edges"))),
+                     links %>% 
+                       st_drop_geometry() %>%
+                       filter(!modes %in% c("bus", "train")) %>%
+                       dplyr::select(any_of(c("link_id", "from_id", "to_id",  
+                                              link_stress = "lvl_traf_stress",
+                                              "is_car"))),
+                     nodes %>%
+                       st_drop_geometry() %>%
+                       dplyr::select(any_of(c("id", "type"))))
+
+# write output
+write.csv(route_intersections, OUTPUT.ROUTE.INTERSECTIONS.FILE,
+          row.names = FALSE)
+
+
+# 8 Visualise outputs ----
 # -----------------------------------------------------------------------------#
 
 # This section prints a set of maps, one for each survey route, showing its choice set
@@ -630,7 +936,7 @@ st_write(choice_set, OUTPUT.CHOICE.SET.FILE, delete_layer = TRUE)
 # reload survey and choice set routes 
 survey.routes <- st_read(SURVEY_ROUTE_FILE, layer = SURVEY_ROUTE_LAYER) %>%
   st_set_geometry("geom")
-choice_set <- st_read(OUTPUT.CHOICE.SET.FILE) %>%
+choice_set <- st_read(OUTPUT.CHOICE.SET.FILE, layer = "choice_set") %>%
   st_set_geometry("geom")
 
 # setup for parallel processing - detect available cores and create cluster
@@ -755,113 +1061,16 @@ output <-
                     axis.text.y = element_blank()) +
               
               labs(title = map.title)
-
+            
             # map  # to display 
-
+            
             # save the map
             ggsave(paste0(OUTPUT.DIR, OUTPUT.MAP.SUBDIR, "/", map.filename ,".png"),
                    map,
                    width = 30, height = 24, units = "cm")
-
+            
           }
 
 # close the progress bar and cluster
 close(pb)
 stopCluster(cluster)
-
-
-# 6 Discard analysis plots ----
-# -----------------------------------------------------------------------------#
-
-# This section prints plots of the distribution of the numbrs of discards 
-# in finding the BFSLE and Rand routes
-
-# read in discard files
-bfsle.discards <- read.csv(OUTPUT.BFSLE.DISCARD.FILE)
-rand.discards <- read.csv(OUTPUT.RAND.DISCARD.FILE)
-
-# plot function
-discard.plot <- function(discard.file, mytitle) {
-  ggplot(discard.file, aes(x = discards)) +
-    geom_histogram(binwidth = 1, fill = "steelblue", color = "black") +
-    labs(
-      title = mytitle,
-      x = "Number of Discards",
-      y = "Frequency"
-    ) +
-    theme_bw()
-}
-
-# create and save plots
-bflse.discard.plot <- discard.plot(bfsle.discards, 
-                                   "Distribution of discards - BFSLE")
-rand.discard.plot <- discard.plot(rand.discards, 
-                                   "Distribution of discards - random weights")
-
-ggsave(paste0(OUTPUT.DIR, "/bfsle_discard_plot.png"), bflse.discard.plot, 
-       width = 15, height = 12, units = "cm")
-
-ggsave(paste0(OUTPUT.DIR, "/rand_discard_plot.png"), rand.discard.plot, 
-       width = 15, height = 12, units = "cm")
-
-
-# 7 Expanded choice set routes  ----
-# -----------------------------------------------------------------------------#
-# This section creates atable which is an expanded version of 'choice_set', 
-# with one row per link in each trip, and network details attached
-
-# read in routes_networked and network links
-choice_set <- st_read(OUTPUT.CHOICE.SET.FILE) %>%
-  st_set_geometry("geom")
-all.links <- st_read(NETWORK_FILE, layer = LINK_LAYER)
-
-# expand routes_network by adding details listed below from links
-choice_set_expanded <- 
-  expandRoutes(choice_set %>%
-                 st_drop_geometry() %>%
-                 dplyr::select(any_of(c("routeid", "routeid_type", "network_edges"))),
-               all.links %>% 
-                 st_drop_geometry() %>%
-                 dplyr::select(any_of(c("link_id", "length", "highway", "cycleway", "freespeed",
-                                        "surface", "slope_pct", "ndvi", "ndvi_md", "ndvi_75", "ndvi_90",
-                                        "tcc_buffer", "tcc_percent",
-                                        "adt", "lvl_traf_stress"))))
-
-
-# write output
-write.csv(choice_set_expanded, CHOICE.SET.EXPANDED.FILE, row.names = FALSE)
-
-
-# 8 Intersections   ----
-# -----------------------------------------------------------------------------#
-# This section counts, for each route,  the number of intersections, and those with
-# high LTS (ie LTS of level 3 or 4 on the highest-rated road at the intersection)
-
-# Includes only counting intersections with car traffic, and not treating signalised as high
-
-# read in routes_networked and network links
-choice_set <- st_read(OUTPUT.CHOICE.SET.FILE)
-links <- st_read(NETWORK_FILE, layer = LINK_LAYER)
-nodes <- st_read(NETWORK_FILE, layer = NODE_LAYER)
-
-# find number of intersections, and those with high LTS
-route_intersections <- 
-  countIntersections(choice_set %>%
-                       st_drop_geometry() %>%
-                       dplyr::select(any_of(c(routeid = "routeid_type", 
-                                              "network_nodes", "network_edges"))),
-                     links %>% 
-                       st_drop_geometry() %>%
-                       filter(!modes %in% c("bus", "train")) %>%
-                       dplyr::select(any_of(c("link_id", "from_id", "to_id",  
-                                              link_stress = "lvl_traf_stress",
-                                              "is_car"))),
-                     nodes %>%
-                       st_drop_geometry() %>%
-                       dplyr::select(any_of(c("id", "type"))))
-
-# write output
-write.csv(route_intersections, OUTPUT.ROUTE.INTERSECTIONS.FILE,
-          row.names = FALSE)
-
-
