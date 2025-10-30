@@ -90,7 +90,7 @@ OUTPUT.CHOICE.SET.FILE <- paste0(OUTPUT.DIR, "/choice_set.sqlite")
 OUTPUT.BFSLE.DISCARD.FILE <- paste0(OUTPUT.DIR, "/bfsle_discards.csv")
 OUTPUT.RAND.DISCARD.FILE <- paste0(OUTPUT.DIR, "/rand_discards.csv")
 CHOICE.SET.EXPANDED.FILE <- paste0(OUTPUT.DIR, "/choice_set_expanded.csv")
-OUTPUT.ROUTE.INTERSECTIONS.FILE <- paste0(OUTPUT.DIR, "./choice_set_intersections.csv")
+OUTPUT.ROUTE.INTERSECTIONS.FILE <- paste0(OUTPUT.DIR, "/choice_set_intersections.csv")
 
 # 1 Load and set up data ----
 # -----------------------------------------------------------------------------#
@@ -652,11 +652,16 @@ bflse.discard.plot <- discard.plot(bfsle.discards,
 rand.discard.plot <- discard.plot(rand.discards, 
                                    "Distribution of discards - random weights")
 
-ggsave(paste0(OUTPUT.DIR, "/bfsle_discard_plot.png"), bflse.discard.plot, 
-       width = 15, height = 12, units = "cm")
+png(filename = paste0(OUTPUT.DIR, "/bfsle_discard_plot.png"),
+    width = 15, height = 12, units = "cm", res = 300)
+print(bflse.discard.plot)
+dev.off()
 
-ggsave(paste0(OUTPUT.DIR, "/rand_discard_plot.png"), rand.discard.plot, 
-       width = 15, height = 12, units = "cm")
+png(filename = paste0(OUTPUT.DIR, "/rand_discard_plot.png"),
+    width = 15, height = 12, units = "cm", res = 300)
+print(rand.discard.plot)
+dev.off()
+
 
 
 # 6 Expanded choice set routes  ----
@@ -932,6 +937,8 @@ write.csv(route_intersections, OUTPUT.ROUTE.INTERSECTIONS.FILE,
 # -----------------------------------------------------------------------------#
 
 # This section prints a set of maps, one for each survey route, showing its choice set
+
+# NOTE - might not work on Linux
 
 # reload survey and choice set routes 
 survey.routes <- st_read(SURVEY_ROUTE_FILE, layer = SURVEY_ROUTE_LAYER) %>%
