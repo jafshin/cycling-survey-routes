@@ -24,7 +24,6 @@
 ## ------------------------------------# 
 
 library(tidyverse)
-library(tidyr)
 library(sf)
 library(fs)
 library(igraph)  # used in largestConnectedComponent
@@ -939,8 +938,6 @@ write.csv(route_intersections, OUTPUT.ROUTE.INTERSECTIONS.FILE,
 
 # This section prints a set of maps, one for each survey route, showing its choice set
 
-# NOTE - might not work on Linux
-
 # reload survey and choice set routes 
 survey.routes <- st_read(SURVEY_ROUTE_FILE, layer = SURVEY_ROUTE_LAYER) %>%
   st_set_geometry("geom")
@@ -966,7 +963,7 @@ opts <- list(progress = progress)
 output <- 
   foreach(i = 1:length(unique(choice_set$routeid)),
           # foreach(i = 1:20,
-          .packages = c("dplyr", "sf", "stringr", "ggplot2", "ggspatial"),
+          .packages = c("dplyr", "sf", "stringr", "ggplot2", "ggspatial", "tidyr", "purrr"),
           .options.snow = opts) %dopar% {
             
             # selected routeid and routes
