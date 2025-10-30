@@ -24,6 +24,7 @@
 ## ------------------------------------# 
 
 library(tidyverse)
+library(tidyr)
 library(sf)
 library(fs)
 library(igraph)  # used in largestConnectedComponent
@@ -976,17 +977,19 @@ output <-
             routes <- choice_set %>% filter(routeid == route.id) %>%
               
               # convert geometry to link geometries
-              rowwise() %>%
               mutate(
-                geom = {
-                  edge_ids <- as.numeric(unlist(str_split(network_edges, ", ")))
-                  edge_geom <- links %>%
-                    filter(link_id %in% edge_ids) %>%
-                    pull(geom)
-                  st_union(edge_geom)
-                }
+                geom = map(network_edges, ~{
+                  edge_ids <- as.numeric(str_split(.x, ", ", simplify = TRUE))
+                  edge_geom <- links %>% filter(link_id %in% edge_ids) %>% .[["geom"]]
+                  if (length(edge_geom) == 0) {
+                    # make an explicit empty GEOMETRYCOLLECTION to keep types consistent
+                    st_sfc(st_geometrycollection(), crs = st_crs(links))
+                  } else {
+                    st_sfc(st_union(edge_geom), crs = st_crs(links))
+                  }
+                })
               ) %>%
-              ungroup() %>%
+              mutate(geom = do.call(c, geom)) %>%   # combine into a single sfc column
               st_as_sf() %>%
               
               # assign groups and identifier (for colours)
@@ -999,7 +1002,12 @@ output <-
               ) %>%
               group_by(group) %>%
               mutate(identifier = paste0(group, "_", row_number())) %>%
-              ungroup()
+              ungroup() %>%
+              
+              # order identifiers in correct order
+              separate(identifier, into = c("type", "num"), sep = "_", convert = TRUE, remove = FALSE) %>%
+              mutate(type = factor(type, levels = c("pref", "bfsle", "rand"))) %>%
+              arrange(type, num)
             
             map.title <- paste0("Choice set for routeID ", route.id)
             map.filename <- paste0("map_choice_set_routeid", route.id)
@@ -1072,9 +1080,10 @@ output <-
             # map  # to display 
             
             # save the map
-            ggsave(paste0(OUTPUT.DIR, OUTPUT.MAP.SUBDIR, "/", map.filename ,".png"),
-                   map,
-                   width = 30, height = 24, units = "cm")
+            png(filename = paste0(OUTPUT.DIR, OUTPUT.MAP.SUBDIR, "/", map.filename ,".png"),
+                width = 30, height = 24, units = "cm", res = 300)
+            print(map)
+            dev.off()
             
           }
 
