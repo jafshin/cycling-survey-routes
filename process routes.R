@@ -23,6 +23,8 @@
 # 10 Produce an expanded version of the output routes with network link details attached
 # 11 For each route, show number of intersections, and those with high LTS
 # 12 Produce a table showing gender/age for the rider for each route
+# 13 Produce a table of survey route origins and destinations in the same
+#    CRS as the network
 
 # select city
 # city <- "Melbourne"
@@ -56,6 +58,7 @@ if (city == "Melbourne") {
   outputMapDir <- "../Bendigo survey/output maps"
   outputRoutesExpanded <- "../Bendigo survey/routes_networked_expanded.csv"
   outputRouteIntersections <- "../Bendigo survey/routes_networked_intersections.csv"
+  outputODinNetworkCrs <- "../Bendigo survey/route_ODs_network_crs.csv"
   stressJctSheet <- "Most stressful intersection(s) "
   favSpotSheet <- "My favorite spot(s) along the r"
   unfavSpotSheet <- "My least favorite spot(s) along"
@@ -149,7 +152,7 @@ gc()
 # 2 Load and process survey routes ----
 # -----------------------------------------------------------------------------#
 # load survey paths
-if (city == "Melboourne") {
+if (city == "Melbourne") {
   routes <- read.csv(surveyFile)
 } else if (city == "Bendigo") {
   sheet_names <- excel_sheets(surveyFile)
@@ -902,3 +905,36 @@ route.age.gender.table <- routes_networked %>%
 
 # write output
 write.csv(route.age.gender.table, "../Bendigo survey/routes gender age.csv", row.names = F)
+
+
+# 12 Route origin/destinations, in network CRS ----
+# -----------------------------------------------------------------------------#
+# For each route, show its origin/destination coordinates in the network CRS
+
+# Find network crs
+networkCrs <- st_read(networkFile, layer = linkLayer) %>%
+  st_crs()
+
+# Next step: run section 2 to create routes_sf
+
+# Extract start and end points of routes_sf
+coords <- st_coordinates(routes_sf)
+endpoints <- as_tibble(coords) %>%
+  group_by(L1) %>%        # one group per LINESTRING
+  summarise(
+    start_x = X[1],
+    start_y = Y[1],
+    end_x   = X[n()],
+    end_y   = Y[n()]
+  )
+
+# Join back to sf_object
+routes_sf_endpoints <- routes_sf %>%
+  mutate(L1 = row_number()) %>%
+  left_join(endpoints, by = "L1") %>%
+  select(-L1) %>%
+  st_drop_geometry()
+
+# Save output
+write.csv(routes_sf_endpoints, outputODinNetworkCrs, row.names = F)
+
