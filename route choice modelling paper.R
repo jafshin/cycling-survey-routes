@@ -12,7 +12,12 @@ library(scales)
 # Maps number of survey routes using each link (with links between the same
 # pair of nodes treated as a single 'link')
 
+
+# 1.1 Link counts for all base routes (first paper, but not used) ----
+# -------------------------------------#
 # read in network and routes
+links <- st_read("../network v20250828 unsimplified/network.sqlite", layer = "links") %>%
+  st_set_geometry("geom")
 nodes <- st_read("../network v20250828 unsimplified/network.sqlite", layer = "nodes") %>%
   st_set_geometry("geom")
 
@@ -61,6 +66,150 @@ edges_sf <- edge_counts %>%
 
 # save output file
 st_write(edges_sf, "../GIS/link counts.sqlite")
+
+
+# 1.2 Link counts for selected base, shortest and impedance routes (second paper) ----
+# -------------------------------------#
+
+# read in network
+links <- st_read("../network v20250828 unsimplified/network.sqlite", layer = "links") %>%
+  st_set_geometry("geom")
+nodes <- st_read("../network v20250828 unsimplified/network.sqlite", layer = "nodes") %>%
+  st_set_geometry("geom")
+
+# read in 'new routes' (shortest and impedance-based modelled routes)
+new.routes <- read.csv("../Bendigo survey/routed_ODs_10_02.csv")
+
+# read in survey routes, and filter to those selected for analysis in 'new routes'
+base.routes <- st_read("../Bendigo survey/routes_networked.sqlite", layer = "survey") %>%
+  filter(routeid %in% new.routes$routeID)
+
+
+# extract and tally route edges, for each group
+edge_counts_base <- str_split(base.routes$network_edges, ", ") %>% 
+  
+  # route edges in dataframe
+  unlist() %>% 
+  as.numeric() %>%
+  data.frame(link_id = .) %>%
+  
+  # omit NAs (from routes with no links)
+  filter(!is.na(link_id)) %>%
+  
+  # join from and to nodes
+  left_join(links %>% st_drop_geometry() %>% dplyr::select(link_id, from_id, to_id),
+            by = "link_id") %>%
+  
+  # order from_and to_ids, so order is ignored
+  mutate(node1 = pmin(from_id, to_id),
+         node2 = pmax(from_id, to_id)) %>%
+  
+  # group by node pairs, and tally
+  group_by(node1, node2) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
+edge_counts_short <- str_split(new.routes$pathLinkIds_Shortest, "\\|") %>% 
+  
+  # route edges in dataframe
+  unlist() %>% 
+  as.numeric() %>%
+  data.frame(link_id = .) %>%
+  
+  # omit NAs (from routes with no links)
+  filter(!is.na(link_id)) %>%
+  
+  # join from and to nodes
+  left_join(links %>% st_drop_geometry() %>% dplyr::select(link_id, from_id, to_id),
+            by = "link_id") %>%
+  
+  # order from_and to_ids, so order is ignored
+  mutate(node1 = pmin(from_id, to_id),
+         node2 = pmax(from_id, to_id)) %>%
+  
+  # group by node pairs, and tally
+  group_by(node1, node2) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
+
+edge_counts_short <- str_split(new.routes$pathLinkIds_Shortest, "\\|") %>% 
+  
+  # route edges in dataframe
+  unlist() %>% 
+  as.numeric() %>%
+  data.frame(link_id = .) %>%
+  
+  # omit NAs (from routes with no links)
+  filter(!is.na(link_id)) %>%
+  
+  # join from and to nodes
+  left_join(links %>% st_drop_geometry() %>% dplyr::select(link_id, from_id, to_id),
+            by = "link_id") %>%
+  
+  # order from_and to_ids, so order is ignored
+  mutate(node1 = pmin(from_id, to_id),
+         node2 = pmax(from_id, to_id)) %>%
+  
+  # group by node pairs, and tally
+  group_by(node1, node2) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
+
+edge_counts_imped <- str_split(new.routes$pathLinkIds_impedance, "\\|") %>% 
+  
+  # route edges in dataframe
+  unlist() %>% 
+  as.numeric() %>%
+  data.frame(link_id = .) %>%
+  
+  # omit NAs (from routes with no links)
+  filter(!is.na(link_id)) %>%
+  
+  # join from and to nodes
+  left_join(links %>% st_drop_geometry() %>% dplyr::select(link_id, from_id, to_id),
+            by = "link_id") %>%
+  
+  # order from_and to_ids, so order is ignored
+  mutate(node1 = pmin(from_id, to_id),
+         node2 = pmax(from_id, to_id)) %>%
+  
+  # group by node pairs, and tally
+  group_by(node1, node2) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
+
+# combine the results and create line geometries for each node pair
+edges_sf_combined  <- bind_rows(edge_counts_base %>% dplyr::select(node1, node2),
+                        edge_counts_short %>% dplyr::select(node1, node2),
+                        edge_counts_imped %>% dplyr::select(node1, node2)) %>%
+  # distinct node pairs from any of the 3 route types
+  distinct() %>%
+  # create line geometry between the two nodes
+  rowwise() %>%
+  mutate(
+    geometry = st_sfc(
+      st_linestring(
+        rbind(
+          st_coordinates(nodes$geom[nodes$id == node1]),
+          st_coordinates(nodes$geom[nodes$id == node2])
+        )
+      )
+    )
+  ) %>%
+  ungroup() %>%
+  st_as_sf(crs = st_crs(nodes)) %>%
+  # join in the 3 sets of node counts
+  left_join(edge_counts_base %>% rename(n_base = n), by = c("node1", "node2")) %>%
+  left_join(edge_counts_short %>% rename(n_shorte = n), by = c("node1", "node2")) %>%
+  left_join(edge_counts_imped %>% rename(n_imped = n), by = c("node1", "node2"))
+
+# save output file
+st_write(edges_sf_combined, "../GIS/link counts combined.sqlite")
+
+
 
 
 # 2 Demographic table ----
@@ -310,3 +459,214 @@ purpose_table <- routes %>%
 write_csv(purpose_table, "../Bendigo survey/purpose table.csv")
 
 
+
+# 4 Observed vs shortest and least-impedance metrics ----
+# -----------------------------------------------------------------------------#
+# Table of comparison of various aspects of observed, shortest and least-impedence routes
+
+# Read in network links
+links <- st_read("../network v20250828 unsimplified/network.sqlite", layer = "links") |>
+  st_set_geometry("geom")
+
+# Read in 'new routes' (shortest and impedance-based modelled routes)
+new.routes <- read.csv("../Bendigo survey/routed_ODs_10_02.csv")
+
+# Read in survey routes, and filter to those selected for analysis in 'new routes'
+base.routes <- st_read("../Bendigo survey/routes_networked.sqlite", layer = "survey") |>
+  filter(routeid %in% new.routes$routeID)
+
+# Extract the individual links for each route
+base_links <- base.routes %>%
+  st_drop_geometry() %>%
+  select(routeid, network_edges) %>%
+  mutate(link_id = str_split(network_edges, ",\\s*")) %>%
+  unnest(link_id) %>%
+  mutate(link_id = as.numeric(link_id)) %>%
+  dplyr::select(routeid, link_id) %>%
+  mutate(type = "base")
+
+short_links <- new.routes %>%
+  st_drop_geometry() %>%
+  select(routeid = routeID, pathLinkIds_Shortest) %>%
+  mutate(link_id = str_split(pathLinkIds_Shortest, "\\|")) %>%
+  unnest(link_id) %>%
+  mutate(link_id = as.numeric(link_id)) %>%
+  dplyr::select(routeid, link_id) %>%
+  mutate(type = "short")
+
+imped_links <- new.routes %>%
+  st_drop_geometry() %>%
+  select(routeid = routeID, pathLinkIds_impedance) %>%
+  mutate(link_id = str_split(pathLinkIds_impedance, "\\|")) %>%
+  unnest(link_id) %>%
+  mutate(link_id = as.numeric(link_id)) %>%
+  dplyr::select(routeid, link_id) %>%
+  mutate(type = "imped")
+
+# Combined table of link id's, with link details joined
+route_links <- bind_rows(base_links, short_links, imped_links) %>%
+  left_join(links %>% st_drop_geometry(), by = "link_id")
+
+# Table of metrics
+
+# Average trip length
+trip_length <- route_links %>%
+  # length for each type and routeid
+  group_by(type, routeid) %>%
+  summarise(length = sum(length), .groups = "drop") %>%
+  # average length for each type, in km
+  group_by(type) %>%
+  summarise(avg_length = mean(length) / 1000, .groups = "drop") %>%
+  # reshape
+  mutate(metric = "trip length") %>%
+  pivot_wider(names_from = type, values_from = avg_length)
+
+# LTS metrics
+LTS_metrics <- route_links %>%
+  # total length for each type and LTS level
+  group_by(type, lvl_traf_stress) %>%
+  summarise(length = sum(length), .groups = "drop") %>%
+  # length for each LTS level as percentage of length for the type
+  group_by(type) %>%
+  mutate(pct_length = length / sum(length) * 100) %>%
+  ungroup() %>%
+  # reshape
+  dplyr::select(type, metric = lvl_traf_stress, pct_length) %>%
+  mutate(metric = paste0("LTS", metric)) %>%
+  pivot_wider(names_from = type, values_from = pct_length)
+
+# Protected cycling infra
+infra <- route_links %>%
+  # add 'infra' column for protected status
+  mutate(infra = case_when(
+    cycleway %in% c("shared_path", "bikepath", "separated_lane") ~ "protected",
+    cycleway %in% c("simple_lane", "inadequate_lane") ~ "painted",
+    TRUE ~ "none")
+    ) %>%
+  # total length for each type and infra 
+  group_by(type, infra) %>%
+  summarise(length = sum(length), .groups = "drop") %>%
+  # length for each infra as percentage of length for the type
+  group_by(type) %>%
+  mutate(pct_length = length / sum(length) * 100) %>%
+  ungroup() %>%
+  # reshape
+  dplyr::select(type, metric = infra, pct_length) %>%
+  pivot_wider(names_from = type, values_from = pct_length)
+
+# Slope ##NEED TO CHANGE, IT SHOULD BE PERCENT
+# check extent of NAs
+slope.na <- sum(route_links %>% filter(is.na(slope_pct)) %>% .$length)  / 
+  sum(route_links$length)
+slope.na  # 0.0006079744 (0.06% of route length) - so just disregard
+
+slope_avg <- route_links %>%
+  # weighted average of slope by route length
+  group_by(type) %>%
+  summarise(slope_pct = weighted.mean(slope_pct, w = length, na.rm = TRUE)) %>%
+  # reshape
+  mutate(metric = "slope_pct") %>%
+  pivot_wider(names_from = type, values_from = slope_pct)
+
+
+slope_pct <- route_links %>%
+  # add slope category
+  mutate(slope_cat = case_when(
+           slope_pct >= 2 & slope_pct <= 6 ~ "gentle",
+           slope_pct > 6 ~ "steep", 
+           TRUE ~ "other"
+           )) %>%
+  # total length for each type and slope_cat 
+  group_by(type, slope_cat) %>%
+  summarise(length = sum(length), .groups = "drop") %>%
+  # length for each slope_cat as percentage of length for the type
+  group_by(type) %>%
+  mutate(pct_length = length / sum(length) * 100) %>%
+  ungroup() %>%
+  # reshape
+  dplyr::select(type, metric = slope_cat, pct_length) %>%
+  pivot_wider(names_from = type, values_from = pct_length)
+
+# Speed limit
+# check extent of NAs
+speed.na <- sum(route_links %>% filter(is.na(freespeed)) %>% .$length)  / 
+  sum(route_links$length)
+speed.na  # 0 - none
+
+speed <- route_links %>%
+  # convert freespeed (m/s) to km/h
+  mutate(speed_limit = freespeed * 3.6) %>%
+  # weighted average of speed by route length
+  group_by(type) %>%
+  summarise(speed = weighted.mean(speed_limit, w = length, na.rm = TRUE)) %>%
+  # reshape
+  mutate(metric = "speed") %>%
+  pivot_wider(names_from = type, values_from = speed)
+
+# Traffic
+# check extent of NAs
+traffic.na <- sum(route_links %>% filter(is.na(adt)) %>% .$length)  / 
+  sum(route_links$length)
+traffic.na  # 0.4131315 - so 41%
+route_links %>% 
+       dplyr::select(highway, length, adt) %>%
+       group_by(highway, adt) %>%
+       summarise(length = sum(length), .groups = "drop")
+# highway             adt   length
+# <chr>             <dbl>    <dbl>
+# 1  corridor             NA     35.9
+# 2  cycleway             NA 901642. 
+# 3  footway              NA  70446. 
+# 4  living_street       375  10479. 
+# 5  path                 NA  18334. 
+# 6  pedestrian           NA   5877. 
+# 7  primary              NA 111458. 
+# 8  proposed_cycleway    NA   1489. 
+# 9  residential         375 860372. 
+# 10 secondary          5000 332450. 
+# 11 secondary_link     5000   1320. 
+# 12 service             375  75612. 
+# 13 tertiary           1500 583224. 
+# 14 tertiary_link      1500    364. 
+# 15 track                NA 115554. 
+# 16 trunk                NA 243303. 
+# 17 trunk_link           NA   3466. 
+# 18 unclassified        375 226646.
+
+# There's a lot of primary and trunk without adt values; I don't think it's 
+# particularly safe to use
+
+# Combine
+metric_table <- bind_rows(trip_length, LTS_metrics, infra,
+                          slope_avg, slope_pct, speed) %>%
+  dplyr::select(metric, base, short, imped)
+  
+  
+## Save as CSV ----
+write.csv(metric_table, "../Bendigo survey/metric table.csv", row.names = FALSE)
+
+# output for copy & paste into Overleaf
+metric_table %>%
+  # round to desired number
+  mutate(across(c(base, short, imped),
+                ~ case_when(metric == "slope_pct" ~ round(., 3),
+                            metric == "steep" ~ round(., 2),
+                            TRUE ~ round(., 1)))) %>%
+  # add a &-separated column for pasting to overleaf
+  mutate(overleaf = paste(base, "&", short, "&", imped))
+
+# metric       base  short  imped overleaf               
+# <chr>       <dbl>  <dbl>  <dbl> <chr>                  
+# 1 trip length  4.9   4.3    4.6   4.9 & 4.3 & 4.6        
+# 2 LTS1        31.7  13.9   47.8   31.7 & 13.9 & 47.8     
+# 3 LTS2        35.9  39.5   26.9   35.9 & 39.5 & 26.9     
+# 4 LTS3        16.7  21.1   10.4   16.7 & 21.1 & 10.4     
+# 5 LTS4        15.7  25.5   14.9   15.7 & 25.5 & 14.9     
+# 6 none        48.6  56.5   36.5   48.6 & 56.5 & 36.5     
+# 7 painted     25.8  32.4   21.9   25.8 & 32.4 & 21.9     
+# 8 protected   25.7  11.1   41.7   25.7 & 11.1 & 41.7     
+# 9 slope_pct   -0.07 -0.071 -0.067 -0.07 & -0.071 & -0.067
+# 10 gentle      12.5  13.8   12.7   12.5 & 13.8 & 12.7     
+# 11 other       86.9  85.4   86.3   86.9 & 85.4 & 86.3     
+# 12 steep        0.64  0.81   0.97  0.64 & 0.81 & 0.97      
+# 13 speed       44.6  51.3   41.7   44.6 & 51.3 & 41.7     
