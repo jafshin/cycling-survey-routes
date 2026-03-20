@@ -78,7 +78,8 @@ nodes <- st_read("../network v20250828 unsimplified/network.sqlite", layer = "no
   st_set_geometry("geom")
 
 # read in 'new routes' (shortest and impedance-based modelled routes)
-new.routes <- read.csv("../Bendigo survey/routed_ODs_10_02.csv")
+# new.routes <- read.csv("../Bendigo survey/routed_ODs_10_02.csv")  # old version, now replaced
+new.routes <- read_excel("../Bendigo survey/routed_ODs_Surveyed_20_03.xlsx")
 
 # read in survey routes, and filter to those selected for analysis in 'new routes'
 base.routes <- st_read("../Bendigo survey/routes_networked.sqlite", layer = "survey") %>%
@@ -108,30 +109,6 @@ edge_counts_base <- str_split(base.routes$network_edges, ", ") %>%
   group_by(node1, node2) %>%
   summarise(n = n()) %>%
   ungroup()
-
-edge_counts_short <- str_split(new.routes$pathLinkIds_Shortest, "\\|") %>% 
-  
-  # route edges in dataframe
-  unlist() %>% 
-  as.numeric() %>%
-  data.frame(link_id = .) %>%
-  
-  # omit NAs (from routes with no links)
-  filter(!is.na(link_id)) %>%
-  
-  # join from and to nodes
-  left_join(links %>% st_drop_geometry() %>% dplyr::select(link_id, from_id, to_id),
-            by = "link_id") %>%
-  
-  # order from_and to_ids, so order is ignored
-  mutate(node1 = pmin(from_id, to_id),
-         node2 = pmax(from_id, to_id)) %>%
-  
-  # group by node pairs, and tally
-  group_by(node1, node2) %>%
-  summarise(n = n()) %>%
-  ungroup()
-
 
 edge_counts_short <- str_split(new.routes$pathLinkIds_Shortest, "\\|") %>% 
   
@@ -207,7 +184,7 @@ edges_sf_combined  <- bind_rows(edge_counts_base %>% dplyr::select(node1, node2)
   left_join(edge_counts_imped %>% rename(n_imped = n), by = c("node1", "node2"))
 
 # save output file
-st_write(edges_sf_combined, "../GIS/link counts combined.sqlite")
+st_write(edges_sf_combined, "../GIS/link counts combined.sqlite", delete_layer = TRUE)
 
 
 
@@ -469,6 +446,7 @@ links <- st_read("../network v20250828 unsimplified/network.sqlite", layer = "li
   st_set_geometry("geom")
 
 # Read in 'new routes' (shortest and impedance-based modelled routes)
+# NOTE that this has NOT been re-run with the updated 'new routes' used in section 1.2
 new.routes <- read.csv("../Bendigo survey/routed_ODs_10_02.csv")
 
 # Read in survey routes, and filter to those selected for analysis in 'new routes'
