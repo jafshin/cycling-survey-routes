@@ -648,3 +648,83 @@ metric_table %>%
 # 11 other       86.9  85.4   86.3   86.9 & 85.4 & 86.3     
 # 12 steep        0.64  0.81   0.97  0.64 & 0.81 & 0.97      
 # 13 speed       44.6  51.3   41.7   44.6 & 51.3 & 41.7     
+
+
+# 5 Unique respondents and multiple observations ----
+# -----------------------------------------------------------------------------#
+
+# Addresses a question in reviewer's comments on first route choice modelling
+# paper, asking how many unique participants contributed to the 258 modelled routes
+# and how many had multiple observations
+
+# read in respondents and routes (same as .Rmd file)
+surveyFile <- "../Bendigo survey/responses-8gi6nyx69dt6-2025-07-10T04_40_41.798Z.xlsx"
+
+sheet_names <- excel_sheets(surveyFile)
+
+spot_sheet_names <- c("Most stressful intersection(s) ",
+                      "My favorite spot(s) along the r",
+                      "My least favorite spot(s) along")
+
+route_sheet_names <- sheet_names[!sheet_names %in% c("Respondents", 
+                                                     spot_sheet_names)]
+
+respondents <- read_excel(surveyFile, sheet = "Respondents")
+
+routes <- lapply(route_sheet_names, function(sheet) {
+  data <- read_excel(surveyFile, sheet = sheet)
+  data$destination <- sheet  # add sheet name as a new column
+  return(data)
+}) %>%
+  bind_rows()
+
+# check overall details
+unique.respondents <- length(unique(respondents$`Respondent ID`))
+unique.respondents  # 284
+
+unique.route.respondents <- length(unique(routes$`Respondent ID`))
+unique.route.respondents  # 184
+
+# check number of respondents for retained routes - this is Supan's file
+# of the routes he retained, as explained in the first route choice modelling
+# paper (essentially, excluding routes that weren't properly drawn or were
+# for recreational purposes)
+retained_routes <- read.csv("../Bendigo survey/retained_routes.csv") %>%
+  .$routeid
+
+# number of participants for the retained routes
+SURVEY_ROUTE_FILE <- "../Bendigo survey/routes_networked.sqlite"
+SURVEY_ROUTE_LAYER <- "survey"
+survey_routes <- st_read(SURVEY_ROUTE_FILE, layer = SURVEY_ROUTE_LAYER)
+
+retained.routes <- survey_routes |>
+  filter(routeid %in% retained_routes) # nrows: 258
+
+# Number of participants contributing retained routes
+length(unique(retained.routes$respondentid))  # 131
+
+# numbers of participants contributing different numbers of routes
+mult.obs <- retained.routes |>
+  st_drop_geometry() |>
+  # number of routes for each respondent
+  group_by(respondentid) |>
+  summarise(resp_routes = n()) |>
+  ungroup() |>
+  # number of respondent for each number
+  group_by(resp_routes) |>
+  summarise(n = n()) |>
+  ungroup() |>
+  mutate(pct = n / sum(n) * 100)
+mult.obs
+# resp_routes     n    pct
+# <int> <int>  <dbl>
+# 1           1    69 52.7  
+# 2           2    35 26.7  
+# 3           3    12  9.16 
+# 4           4     6  4.58 
+# 5           5     1  0.763
+# 6           6     5  3.82 
+# 7           7     1  0.763
+# 8           8     1  0.763
+# 9           9     1  0.763
+
